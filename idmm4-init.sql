@@ -1,0 +1,10 @@
+-- T_C_DICT
+INSERT INTO `T_C_DICT` VALUES ('T_M_ALARM', 'ALARM_LEVEL', '1', '0', '普通', '');
+INSERT INTO `T_C_DICT` VALUES ('T_M_ALARM', 'ALARM_LEVEL', '2', '1', '中等', '');
+INSERT INTO `T_C_DICT` VALUES ('T_M_ALARM', 'ALARM_LEVEL', '3', '2', '重要', '');
+INSERT INTO `T_C_DICT` VALUES ('T_M_ALARM', 'ALARM_TYPE', '1', '0', 'CPU', '');
+INSERT INTO `T_C_DICT` VALUES ('T_M_ALARM', 'ALARM_TYPE', '2', '1', '硬盘', '');
+INSERT INTO `T_C_DICT` VALUES ('T_M_ALARM', 'ALARM_TYPE', '3', '2', '内存',  '');
+INSERT INTO `T_C_DICT` VALUES ('T_M_ALARM', 'ALARM_TYPE', '4', '3', '网络',  '');
+INSERT INTO `T_C_DICT` VALUES ('T_M_ALARM', 'ALARM_TYPE', '5', '4', '消息积压',  '');
+INSERT INTO `T_C_DICT` VALUES ('T_M_ALARM', 'ALARM_TYPE', '6', '5', '消息处理时长',  '');
