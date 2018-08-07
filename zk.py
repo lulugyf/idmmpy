@@ -131,6 +131,18 @@ def main():
     time.sleep(120.0)
     zk.stop()
 
+import random
+def get_rand_httpaddr(zk_addr):
+    zk = ZKCli(zk_addr)
+    zk.start()
+    addrs = zk.list('/idmm/httpbroker')
+    random.seed(time.time())
+    idx = random.randint(0, len(addrs))
+    if idx == len(addrs):
+        idx = len(addrs)-1
+    zk.close()
+    return addrs[idx]
+
 
 if __name__ == '__main__':
     #main()

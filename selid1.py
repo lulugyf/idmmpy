@@ -10,14 +10,32 @@ import sys
 import json
 
 
-def conndb():
-    #import data_decrypt
-    #passwd=data_decrypt.decryptData_auth()
-    # IDMMOPR/ykRwj_b6@idmmdb1
-    passwd = 'ykRwj_b6'
-    db=cx_Oracle.connect('idmmopr',passwd,'idmmdb2')
-    cur=db.cursor()
-    return db, cur
+# def conndb():
+#     #import data_decrypt
+#     #passwd=data_decrypt.decryptData_auth()
+#     # IDMMOPR/ykRwj_b6@idmmdb1
+#     passwd = 'ykRwj_b6'
+#     db=cx_Oracle.connect('idmmopr',passwd,'idmmdb2')
+#     cur=db.cursor()
+#     return db, cur
+
+from local_db import conndb
+
+def _print_tmstr(t):
+    print "  %s" % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(t)/1000))
+
+def _print_tm(s):
+    print " %d" % (time.mktime(time.strptime(s, "%Y-%m-%d %H:%M:%S"))*1000, )
+
+def tm():
+    if len(sys.argv) < 2:
+        print "give me a time"
+    else:
+        s = sys.argv[1]
+        if s.find(':') > 0:
+            _print_tm(s)
+        else:
+            _print_tmstr(s)
 
 # 查询单个消息,  分别从索引表 错误表 和 body表查,  如果遇到压缩的content, 则保存到文件中
 def selid():
@@ -94,8 +112,32 @@ def sel_orderid_err(topic, client, tag):
     cur.close()
     db.close()
 
+
+#取单个主题的索引数据
+def dumpTopcIndexs(topic, client, outfile):
+    db, cur = conndb()
+    fo = open(outfile, "w")
+    for i in range(200):
+        print 'table--', i
+        ct = 0
+        cur.execute('select idmm_msg_id, create_time, group_id, priority from msgidx_part_%d where DST_TOPIC_ID=:v1 and DST_CLI_ID=:v2' % i, (topic, client))
+        while True:
+            rows = cur.fetchmany(300)
+            if rows is None or len(rows) == 0:
+                break
+            ct += len(rows)
+            for r in rows:
+                fo.write("%s %d %s %d\n"%( r[0], r[1], r[2], r[3] ))
+        print '   rows: ', ct
+    fo.close()
+    db.close()
+
+# python selid1.py seltopic T101RptOrderLineDest-B Sub111RptOrderLine T101RptOrderLineDest-B.txt
 if __name__ == '__main__':
-    selid()
+    if len(sys.argv) > 4 and sys.argv[1] == 'seltopic':
+        dumpTopcIndexs(sys.argv[2], sys.argv[3], sys.argv[4])
+    else:
+        selid()
     #sel_orderid_err('T101SmspDest-B', 'Sub113Order', '"crmOrderId"')
     #sel_orderid_err('T109SmspDest-B', 'Sub113Credit', '"orderId"')
     #sel_orderid_err('T105DataBatchSynDest-B',  'Sub113DataBatchSyn', '"WORK_ITEM_ID"')

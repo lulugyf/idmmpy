@@ -7,11 +7,13 @@ import cx_Oracle
 import sys
 import json
 
-def conn():
-    passwd = 'ykRwj_b6'
-    db = cx_Oracle.connect('idmmopr', 'ykRwj_b6', 'idmmdb2')
-    cur = db.cursor()
-    return db, cur
+# def conndb():
+#     passwd = 'ykRwj_b6'
+#     db = cx_Oracle.connect('idmmopr', 'ykRwj_b6', 'idmmdb2')
+#     cur = db.cursor()
+#     return db, cur
+
+from local_db import conndb
 
 def restore_idx(db, cur, topic, client, tblcount):
     for i in range(tblcount):
@@ -45,7 +47,7 @@ def main():
     topic = "T103DataSynRESDest-B"
     client = "Sub105DataSyn"
 
-    db, cur = conn()
+    db, cur = conndb()
     restore_idx(db, cur, topic, client, 200)
     restore_err(db, cur, topic, client)
 
