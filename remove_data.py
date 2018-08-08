@@ -112,7 +112,7 @@ def clear_msgidx(tbl_begin, tbl_end):
 
 def _one_table(args):
     sql, tag, n = args
-    db, cur = conndb()
+    # db, cur = conndb()
     count = 0
     while True:
         cur.execute(sql)
@@ -122,13 +122,13 @@ def _one_table(args):
         db.commit()
         print "    %s %d %s %d" %(tag, n, time.time(), rcount )
         count += rcount
-    cur.close()
-    db.close()
+    # cur.close()
+    # db.close()
     return (tag, n, count)
 
 def clear_tw():
     print "Clearing data created two weeks ago..."
-    pool = Pool(processes=20)
+    pool = Pool(processes=20, initializer=_proc_init)
     ctime = int((time.time() - tw) * 1000)  # keep 2 weeks
     sqls = []
     sql_tmpl = "delete messagestore_%d where createtime<%d and rownum<10001"
@@ -172,16 +172,20 @@ def find_no_store(tbl):
     db.close()
 
 
+def _proc_init():
+    global db
+    global cur
+    db, cur = conndb()
 def _check_proc(args):
     tm, i = args
-    db, cur = conndb()
+    #db, cur = conndb()
     cur.execute("select dst_topic_id, dst_cli_id, count(*) from msgidx_part_%d"
                 " where create_time<:tm and commit_time=0"
                 " group by dst_topic_id, dst_cli_id" % (i,),
                 (tm,))
     ret = [("%s,%s" % (r[0], r[1]), r[2]) for r in cur.fetchall()]
-    cur.close()
-    db.close()
+    # cur.close()
+    # db.close()
     return ret
 
 
@@ -191,7 +195,7 @@ def check_unconsume_2w():
     tm = int( ( time.time()-tw) * 1000)
     kv = {}
     n_proc = 20
-    pool = Pool(processes=n_proc)
+    pool = Pool(processes=n_proc, initializer=_proc_init)
     args = [(tm, i) for i in range(index_count)]
     ret = pool.map(_check_proc, args)
     pool.close()

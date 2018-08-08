@@ -34,7 +34,9 @@ def conndb():
     #passwd=data_decrypt.decryptData_auth()
     # IDMMOPR/ykRwj_b6@idmmdb1
     passwd = 'ykRwj_b6'
-    db = cx_Oracle.connect('idmmopr',passwd, _get_conf('dbname'))
+    dbname = _get_conf("dbname")
+    print "PID %d connect to %s" % ( os.getpid(), dbname)
+    db = cx_Oracle.connect('idmmopr',passwd, dbname)
     cur=db.cursor()
     return db, cur
 
