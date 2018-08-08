@@ -1,6 +1,9 @@
 #coding=utf-8
 
 '''
+
+-- 查看表占用的空间
+
 COLUMN size_mb      FORMAT '999,999,990.0'
 COLUMN num_rows     FORMAT '999,999,990'
 COLUMN fmt_short    FORMAT A24
@@ -34,6 +37,7 @@ CLEAR COMPUTES
 CLEAR BREAKS;
 
 
+-- 查看表索引
 select INDEX_NAME, TABLE_OWNER, TABLE_NAME, UNIQUENESS from USER_INDEXES where table_name like 'MSGIDX_PART_1';
 
 or
@@ -57,22 +61,14 @@ for i in range(200): print "create index idx_msgpart_ctime_%d on msgidx_part_%d(
 for i in range(1000): print "create index idx_msgstore_ctime_%d on messagestore_%d(createtime) tablespace TBS_IDMMDB_IDX;"%(i, i)
 '''
 
-import cx_Oracle
 import sys
 import time
+from multiprocessing import Pool, Queue
+
 
 tw = 3600 * 24 * 14  # 两周的秒数
 index_count = 200
 body_count = 1000
-
-# def conndb():
-#     #import data_decrypt
-#     #passwd=data_decrypt.decryptData_auth()
-#     # IDMMOPR/ykRwj_b6@idmmdb1
-#     passwd = 'ykRwj_b6'
-#     db=cx_Oracle.connect('idmmopr',passwd,'idmmdb2')
-#     cur=db.cursor()
-#     return db, cur
 
 from local_db import conndb
 
@@ -128,10 +124,10 @@ def _one_table(args):
         count += rcount
     cur.close()
     db.close()
-    return count
+    return (tag, n, count)
 
-from multiprocessing import Pool
 def clear_tw():
+    print "Clearing data created two weeks ago..."
     pool = Pool(processes=20)
     ctime = int((time.time() - tw) * 1000)  # keep 2 weeks
     sqls = []
@@ -175,26 +171,38 @@ def find_no_store(tbl):
     cur.close()
     db.close()
 
-# 检查是否有超过2周未消费的消息, 打印出主题
-def check_unconsume_2w():
+
+def _check_proc(args):
+    tm, i = args
     db, cur = conndb()
-    tm = int(( time.time()-tw) * 1000)
-    kv = {}
-    for i in range(index_count):
-        cur.execute("select dst_topic_id, dst_cli_id, count(*) from msgidx_part_%d"
-                    " where create_time<:tm and commit_time=0"
-                    " group by dst_topic_id, dst_cli_id"%(i, ),
-                    (tm, ))
-        c = 0
-        for r in cur.fetchall():
-            k = "%s,%s"%(r[0], r[1])
-            kv[k] = kv.get(k, 0) + r[2]
-            c += 1
-        print "checking ", i, time.time(), c
-    for k, v in kv.items():
-        print k, v
+    cur.execute("select dst_topic_id, dst_cli_id, count(*) from msgidx_part_%d"
+                " where create_time<:tm and commit_time=0"
+                " group by dst_topic_id, dst_cli_id" % (i,),
+                (tm,))
+    ret = [("%s,%s" % (r[0], r[1]), r[2]) for r in cur.fetchall()]
     cur.close()
     db.close()
+    return ret
+
+
+# 检查是否有超过2周未消费的消息, 打印出主题
+def check_unconsume_2w():
+    print ' Checking unconsumed message created 2 weeks ago...'
+    tm = int( ( time.time()-tw) * 1000)
+    kv = {}
+    n_proc = 20
+    pool = Pool(processes=n_proc)
+    args = [(tm, i) for i in range(index_count)]
+    ret = pool.map(_check_proc, args)
+    pool.close()
+
+    for lst in ret:
+        for k, v in lst:
+            kv[k] = kv.get(k, 0) + v
+
+    print 'result: ---'
+    for k, v in kv.items():
+        print k, v
 
 
 def check_min_tm():
@@ -213,7 +221,17 @@ def main():
 
 if __name__ == '__main__':
     #main()
-    clear_tw()
+    if len(sys.argv) < 2:
+        print "  Usage: %s <clear|check>"
+        print "    check:  检查2周前仍未消费的消息的主题和消息数量"
+        print "    clear:  删除2周前的数据(包括索引和body)"
+        exit(0)
+    cmd = sys.argv[1]
+    if cmd == 'clear':
+        clear_tw()
+    elif cmd == 'check':
+        check_unconsume_2w()
+
     #find_no_store(int(sys.argv[1]))
     #check_unconsume_2w()
     pass

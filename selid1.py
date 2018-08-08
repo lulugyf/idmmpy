@@ -132,7 +132,62 @@ def dumpTopcIndexs(topic, client, outfile):
     fo.close()
     db.close()
 
+# 读取配置表中的主题对应关系到文件中
+def get_mapping(fname="mapping.txt"):
+    import os
+    os.putenv("NLS_LANG", "American_America.zhs16gbk")
+    sql = '''select a.client_id as pub_client,
+       a.src_topic_id,
+       a.note as src_note,
+       b.attribute_key,
+       b.attribute_value,
+       c.client_id as sub_client,
+       c.dest_topic_id,
+       c.note as dst_note
+  from topic_publish_rel_5   a,
+       topic_mapping_rel_5   b,
+       topic_subscribe_rel_5 c
+ where  -- c.dest_topic_id = 'Test01Dest-A' and
+   c.dest_topic_id = b.dest_topic_id
+   and a.src_topic_id = b.src_topic_id
+    '''
+    db, cur = conndb()
+    cur.execute(sql)
+    f = open(fname, "w")
+    for r in cur.fetchall():
+        f.write(" ".join([str(k).strip() for k in r]))
+        f.write("\n")
+    f.close()
+    cur.close()
+    db.close()
+
+# 获取每个表的空间使用情况
+def get_table_space_used(fname="tables.txt"):
+    db, cur = conndb()
+    sql = """SELECT
+    lower(table_name)  AS table_name
+    ,tablespace_name
+    ,num_rows
+    ,blocks*8/1024      AS size_mb
+    ,pct_free
+    ,compression
+    ,logging
+FROM    user_tables
+ORDER BY 1,2
+    """   # all_tables
+    f = open(fname, "w")
+    cur.execute(sql)
+    f.write(" ".join([d[0] for d in cur.description]) )
+    f.write("\n")
+    for r in cur.fetchall():
+        f.write(" ".join([str(ff).strip() for ff in r]))
+        f.write('\n')
+    f.close()
+    db.close()
+
 # python selid1.py seltopic T101RptOrderLineDest-B Sub111RptOrderLine T101RptOrderLineDest-B.txt
+# python -c "import selid1 as s; s.get_mapping('mapping.txt')"
+# python -c "import selid1 as s; s.get_table_space_used('tables.txt')"
 if __name__ == '__main__':
     if len(sys.argv) > 4 and sys.argv[1] == 'seltopic':
         dumpTopcIndexs(sys.argv[2], sys.argv[3], sys.argv[4])
