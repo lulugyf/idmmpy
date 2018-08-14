@@ -18,8 +18,32 @@ def fetch_limit(c, topic, cli, n=-1):
             time.sleep(0.04)
             #break
 
+def fetch(c, topic, cli):
+    while True:
+        msgid, content = c.fetch(topic, cli)
+        if msgid == 0:
+            print 'no more message'
+            break
+        elif msgid is not None:
+            print '======got', msgid, content
+            c.fetch_commit(topic, cli, msgid)
+            #c.fetch_commit(topic, cli, msgid)
+        else:
+            print 'failed'
+            break
+
+def consume_all(c, fname):
+    for l in open(fname, "r"):
+        k = l.split()
+        if len(k) < 5: continue
+        topic = k[0][1:-1]
+        cli = k[1].strip()
+        fetch(c, topic, cli)
+
 from zk import get_rand_httpaddr
 from local_db import conf_zk_addr
+
+# python ble.py |awk '{if($4>0)print $0}'
 
 if __name__ == '__main__':
     broker_addr = get_rand_httpaddr(conf_zk_addr())
