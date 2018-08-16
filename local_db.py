@@ -30,6 +30,10 @@ def hostname():
 
 def conndb():
     import cx_Oracle
+    if 'xqgnidmm1' == hostname():
+        db = cx_Oracle.connect('idmmopr', 'ykRwj_b6', 'billyzdb')
+        cur = db.cursor()
+        return db, cur
     #import data_decrypt
     #passwd=data_decrypt.decryptData_auth()
     # IDMMOPR/ykRwj_b6@idmmdb1

@@ -15,11 +15,7 @@ python -c "for l in open('a.txt'): t=l.strip(); print 'drop table %s;'%(t, )" >t
 
 '''
 
-def conndb():
-    import cx_Oracle  #idmmopr/ykRwj_b6@billyzdb
-    db = cx_Oracle.connect('idmmopr', 'ykRwj_b6', 'billyzdb')
-    cur = db.cursor()
-    return db, cur
+from local_db import conndb
 
 def _proc_init():
     global db
@@ -44,6 +40,48 @@ def mult_proc():
     for lst in ret:
         pass
 
+# 把所有未消费的消息, 从备份表中捞出来放到当前表中
+# python -c "import db; db.sel_un_msg()"
+def sel_un_msg():
+    src = "bak_"
+    db, cur = conndb()
+    cur1 = db.cursor()
+    msgid_file = "mdgidx.txt"
+    fo = open(msgid_file, "w")
+    for i in range(200):
+        sql = "select idmm_msg_id, dst_cli_id, dst_topic_id from msgidx_part_{1}{0} where commit_time=0".format(i, src)
+        cur.execute(sql)
+        c = 0
+        for r in cur.fetchall():
+            fo.write("{0} {1} {2}\n".format(*r))
+            sql_ins = "insert into msgidx_part_{0} " \
+                      "select idmm_msg_id,produce_cli_id,src_topic_id,dst_cli_id,dst_topic_id,src_commit_code,group_id,priority ," \
+                      "idmm_resend ,consumer_resend ,create_time ,broker_id ,req_time ,commit_code ,commit_time ,commit_desc ," \
+                      "next_topic_id ,next_client_id ,expire_time,to_char(sysdate, 'dd')" \
+                      " from msgidx_part_{1}{0} where idmm_msg_id=:v1 and dst_cli_id=:v2 and dst_topic_id=:v3".format(i, src)
+            cur1.execute(sql_ins, r)
+            c += 1
+        db.commit()
+        print "idx {0} == count {1}".format(i, c)
+    fo.close()
+
+    ids = [l.split()[0].strip() for l in open(msgid_file) if len(l) > 10]
+    c = 0
+    for id in ids:
+        td = id.split("::")[-1]
+        sql = "insert into messagestore_{0} select id, properties, systemproperties, content, createtime, to_char(sysdate,'dd')" \
+              " from messagestore_{1}{0} where id=:v1".format(td, src)
+        try:
+            cur1.execute(sql, (id, ))
+            db.commit()
+            c += 1
+        except Exception,e:
+            print e, id
+        if c % 100 == 0:
+            print " {0} / {1} ".format(c, len(ids))
+    cur.close()
+    cur1.close()
+    db.close()
 
 
 if __name__ == '__main__':
