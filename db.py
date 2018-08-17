@@ -13,6 +13,24 @@ exit
 
 python -c "for l in open('a.txt'): t=l.strip(); print 'drop table %s;'%(t, )" >t.sql
 
+
+
+
+查看表空间使用情况:
+SELECT NVL(b.tablespace_name,nvl(a.tablespace_name,'UNKOWN')) name,
+     ((Mbytes_alloc-NVL(Mbytes_free,0))/Mbytes_alloc)*100   pct_used, Mbytes_free, Mbytes_alloc as Total
+     FROM   ( SELECT   SUM(bytes)/1024/1024 as Mbytes_free
+                     , MAX(bytes)/1024 largest
+                     , tablespace_name
+              FROM sys.dba_free_space
+              GROUP BY tablespace_name
+            ) a
+          , ( SELECT   SUM(bytes)/1024/1024 as Mbytes_alloc
+                     , tablespace_name
+              FROM sys.dba_data_files
+              GROUP BY tablespace_name
+            ) b
+     WHERE a.tablespace_name (+) = b.tablespace_name;
 '''
 
 from local_db import conndb
@@ -82,6 +100,33 @@ def sel_un_msg():
     cur.close()
     cur1.close()
     db.close()
+
+# 每个小时记录下数据库表空间的使用情况, 用于监控
+# python -c "import db; db.tablespace_mon()"
+def tablespace_mon():
+    print time.strftime("%Y%m%d%H%M%S")
+    sql = '''SELECT NVL(b.tablespace_name,nvl(a.tablespace_name,'UNKOWN')) name,
+     ((Mbytes_alloc-NVL(Mbytes_free,0))/Mbytes_alloc)*100   pct_used, Mbytes_free, Mbytes_alloc as Total
+     FROM   ( SELECT   SUM(bytes)/1024/1024 as Mbytes_free
+                     , MAX(bytes)/1024 largest
+                     , tablespace_name
+              FROM sys.dba_free_space
+              GROUP BY tablespace_name
+            ) a
+          , ( SELECT   SUM(bytes)/1024/1024 as Mbytes_alloc
+                     , tablespace_name
+              FROM sys.dba_data_files
+              GROUP BY tablespace_name
+            ) b
+     WHERE a.tablespace_name (+) = b.tablespace_name'''
+    db, cur = conndb()
+    cur.execute(sql)
+    for r in cur.fetchall():
+        tname = r[0]
+        if tname.find("IDMMDB") < 0:
+            continue
+        print "{0}\t{1:.3f}%\t{2:.0f}MB\t{3:.0f}MB".format(*r)
+    cur.close(); db.close()
 
 
 if __name__ == '__main__':
