@@ -129,5 +129,36 @@ def tablespace_mon():
     cur.close(); db.close()
 
 
+def _sub_proc_statics(args):
+    i, topic, cli, bg, ed = args
+    t = time.time()
+    sql = "select  create_time, commit_time, idmm_msg_id from msgidx_part_{0} where dst_topic_id=:v1 and dst_cli_id=:v2 and commit_time between :v3 and :v4"
+    cur.execute(sql.format(i), (topic, cli, bg, ed))
+    ret = ["%d %d %d %d %s\n" % (r[0]/1000/60, r[1]/1000/60, r[0], r[1], r[2]) for r in cur.fetchall()]
+    t1 = time.time()
+    print "%s done %.3f" % (i, t1-t)
+    return ret
+
+# python -c "import db; db.ctime_statics()" T101Order2PrmDest-B	Sub117Prm "2018-08-22 16:00:00" "2018-08-22 16:30:00"
+# cat out.txt|awk '{print $1}'|sort|uniq -c
+# cat out.txt|awk '{print $2}'|sort|uniq -c
+from tm import tmstr
+def ctime_statics():
+    if len(sys.argv) < 5:
+        print "Usage: <topic> <cli> <begin_time> <end_time>"
+        return
+
+    topic, cli, bg, ed = sys.argv[1], sys.argv[2], tmstr(sys.argv[3]), tmstr(sys.argv[4])
+    args = [(i, topic, cli, bg, ed) for i in range(200)]
+    n_proc = 20
+    pool = Pool(processes=n_proc, initializer=_proc_init)
+    ret = pool.map(_sub_proc_statics, args)
+
+    f = open("out.txt", "w")
+    for r in ret:
+        for line in r:
+            f.write(line)
+    f.close()
+
 if __name__ == '__main__':
     mult_proc()

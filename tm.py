@@ -8,9 +8,15 @@ def _print_tm(s):
     print " %d" % (time.mktime(time.strptime(s, "%Y-%m-%d %H:%M:%S"))*1000, )
 
 
+def tmstr(s):
+    if s.find(':') > 0:
+        return time.mktime(time.strptime(s, "%Y-%m-%d %H:%M:%S"))*1000
+    else:
+        return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(s) / 1000))
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print "give me a time"
+        print "give me a time, time format: %Y-%m-%d %H:%M:%S"
     else:
         s = sys.argv[1]
         if s.find(':') > 0:

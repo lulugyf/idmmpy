@@ -87,8 +87,8 @@ def getinfo(bleid, jmxaddr, m, stat):
     print '====(%s)'%jmxaddr, bleid
     last_topic, last_client = "", ""
     for o in o1:
-        s = "%s\t\t%s\t\t%d\t%d\t%d\t%d"%(
-            o['target_topic_id'], o['target_client_id'], o['total'], o['size'], o['sending'], o['err'])
+        s = "%s\t\t%s\t\t%d\t%d\t%d\t%d\t%s"%(
+            o['target_topic_id'], o['target_client_id'], o['total'], o['size'], o['sending'], o['err'],o['status'])
         if o['size'] > 0:
             m.append(bleid + '\t' + s)
         stat[0] += o['total']
@@ -165,8 +165,8 @@ def qmon(zkaddr):
         getinfo(d[0], d[1], m, stat)
     if True: return 
     print '\n--------size > 0:'
-    print 'BLEID  TOPIC_ID   CLIENT_ID  total   size   sending  err'
-    print '--------------------------------------------------------'
+    print 'BLEID  TOPIC_ID   CLIENT_ID  total   size   sending  err  status'
+    print '----------------------------------------------------------------'
     for s in m:
         print '====', s
         
