@@ -22,6 +22,7 @@ class ZKCli:
         # start command will be waiting until its default timeout
         self.zk.start()
         self.zk.add_auth('digest', 'admin:admin')
+        # command> addauth digest admin:admin
 
     def stop(self):
         self.zk.stop()

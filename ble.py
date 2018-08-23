@@ -174,6 +174,43 @@ def qmon(zkaddr):
     print '--total--size--sending'
     print '%d\t%d\t%d'%(stat[0], stat[1], stat[2])
 
+def get_jmxaddr(zkaddr):
+    z = zk.ZKCli(zkaddr)
+    z.start()
+    z.wait()
+
+    ble_ports = []
+    base = '/idmm/ble'
+    for p in z.list(base):
+        data = z.get(base + '/' + p)
+        data1 = data[0]
+        bleid = p[p.find('.') + 1:]
+        jmxaddr = data1[0:data1.find(':')] + data1[data1.rfind(':'):]
+        ble_ports.append((bleid, 'http://'+jmxaddr+'/jolokia/'))
+    broker_ports = []
+    base = '/idmm/broker'
+    for p in z.list(base):
+        data = z.get(base + '/' + p)
+        data1 = data[0]
+        broker_ports.append((p, data1))
+    z.close()
+    return ble_ports, broker_ports
+
+def mem(zkaddr):
+    ble_ports, broker_ports = get_jmxaddr(zkaddr)
+    ble_ports.extend(broker_ports)
+    print "---HeapMemoryUsage:"
+    for id, jmxaddr in ble_ports:
+        url = jmxaddr + "read/java.lang:type=Memory"
+        s = urllib2.urlopen(url)
+        o = json.load(s)
+        o1 = o[u'value']['HeapMemoryUsage']
+        print id, '\t', "{0:.3f} MB/{1:.3f} MB {2:.2f} %".format(o1['used']/1024.0/1024,
+                                    o1['max']/1024.0/1024, o1['used']*100.0/o1['max'])
+
 from local_db import conf_zk_addr
 if __name__ == '__main__':
-    qmon(conf_zk_addr())
+    #zkaddr = '172.21.0.46:3181'
+    zkaddr = conf_zk_addr()
+    qmon(zkaddr)
+    mem(zkaddr)
