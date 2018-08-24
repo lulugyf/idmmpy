@@ -160,5 +160,25 @@ def ctime_statics():
             f.write(line)
     f.close()
 
+def del_topic_idx_subproc(args):
+    i, topic, cli = args
+    sql = "delete msgidx_part_{0} where dst_topic_id=:v1 and dst_cli_id=:v2".format(i)
+    cur.execute(sql, (topic, cli))
+    numrows = cur.rowcount
+    print "table %d rows %d"%(i, numrows)
+    db.commit()
+    return numrows, i
+# 指定消费主题 删除索引表数据, 后续需要手工jmx重新加载内存数据
+# python -c "import db; db.del_topic_idx('T101OrderStateSynDest-A', 'Sub103')"
+# python -c "import db; db.del_topic_idx('T101OrderStateSynDest-B', 'Sub103')"
+# curl http://10.113.181.87:8712/jolokia/exec/com.sitech.crmpd.idmm.ble.RunTime:name=runTime/reload/Sub103/T101OrderStateSynDest-A
+def del_topic_idx(topic, cli):
+    n_proc = 20
+    pool = Pool(processes=n_proc, initializer=_proc_init)
+    args = [(i, topic, cli) for i in range(200)]
+    ret = pool.map(del_topic_idx_subproc, args)
+    for numrows, i in ret:
+        pass # print numrows, i
+
 if __name__ == '__main__':
     mult_proc()

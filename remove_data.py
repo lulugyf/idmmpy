@@ -188,7 +188,6 @@ def _check_proc(args):
     # db.close()
     return ret
 
-
 # 检查是否有超过2周未消费的消息, 打印出主题
 def check_unconsume_2w():
     print ' Checking unconsumed message created 2 weeks ago...'
