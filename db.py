@@ -217,5 +217,36 @@ def check_unconsume_2w():
     for k, v in kv.items():
         print k, v
 
+# 获取各主题未消费消息 最小和最大创建时间 和数量
+def check_unconsumed_subproc(args):
+    i,  = args
+    sql = "select dst_topic_id, dst_cli_id, min(create_time), max(create_time), count(*) from msgidx_part_{0} where commit_time=0" \
+          " group by dst_topic_id, dst_cli_id".format(i)
+    cur.execute(sql, )
+    rows = cur.fetchall()
+    return rows
+# 指定消费主题 删除索引表数据, 后续需要手工jmx重新加载内存数据
+# python -c "import db; db.check_unconsumed()"
+def check_unconsumed():
+    n_proc = 20
+    pool = Pool(processes=n_proc, initializer=_proc_init)
+    args = [(i, ) for i in range(index_count)]
+    ret = pool.map(check_unconsumed_subproc, args)
+    topics = {}
+    for rows in ret:  #合并结果集
+        for r in rows:
+            k = r[0] + "@" + r[1]
+            if topics.has_key(k):
+                t = topics[k]
+                t1 = (r[2], r[3], r[4])
+                if(t[0] > t1[0]): t = (t1[0], t[1], t[2])
+                if(t[1] < t1[1]): t = (t[0], t1[1], t[2])
+                t = (t[0], t[1], t[2]+t1[2])
+                topics[k] = t
+            else:
+                topics[k] = (r[2], r[3], r[4])
+    for k, t in topics.items():
+        print tmstr(str(t[0])), tmstr(str(t[1])), t[2], k
+
 if __name__ == '__main__':
     mult_proc()

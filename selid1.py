@@ -112,6 +112,26 @@ def sel_orderid_err(topic, client, tag):
     cur.close()
     db.close()
 
+# 从err表中把指定主题的消息body取出来放文件
+# python -c "import selid1; selid1.sel_msgbody_err('T101Order2PrmDest-B','Sub117Prm','T101Order2PrmDest-B.txt')"
+def sel_msgbody_err(topic, client, outfile):
+    db, cur = conndb()
+    cur.execute('select IDMM_MSG_ID from msgidx_part_err where DST_TOPIC_ID=:v1 and DST_CLI_ID=:v2', (topic, client))
+    f = open(outfile, "w")
+    for (id,) in cur.fetchall():
+        #print id
+        content = _selcontent(cur, id)
+        f.write(id)
+        f.write('\n')
+        #print type(content)
+        if content is None:
+            f.write("\"[not found]\"")
+        else:
+            f.write(content)
+        f.write('\n')
+    f.close()
+    cur.close()
+    db.close()
 
 #取单个主题的索引数据
 def dumpTopcIndexs(topic, client, outfile):
