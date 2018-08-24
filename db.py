@@ -35,6 +35,10 @@ SELECT NVL(b.tablespace_name,nvl(a.tablespace_name,'UNKOWN')) name,
 
 from local_db import conndb
 
+tw = 3600 * 24 * 14  # 两周的秒数
+index_count = 200
+body_count = 1000
+
 def _proc_init():
     global db
     global cur
@@ -179,6 +183,39 @@ def del_topic_idx(topic, cli):
     ret = pool.map(del_topic_idx_subproc, args)
     for numrows, i in ret:
         pass # print numrows, i
+
+
+def check_unconsume_2w_subproc(args):
+    tm, i = args
+    #db, cur = conndb()
+    cur.execute("select dst_topic_id, dst_cli_id, count(*) from msgidx_part_%d"
+                " where create_time<:tm and commit_time=0"
+                " group by dst_topic_id, dst_cli_id" % (i,),
+                (tm,))
+    ret = [("%s,%s" % (r[0], r[1]), r[2]) for r in cur.fetchall()]
+    # cur.close()
+    # db.close()
+    return ret
+
+# 检查是否有超过2周未消费的消息, 打印出主题
+# python -c "import db; db.check_unconsume_2w()"
+def check_unconsume_2w():
+    print ' Checking unconsumed message created 2 weeks ago...'
+    tm = int( ( time.time()-tw) * 1000)
+    kv = {}
+    n_proc = 20
+    pool = Pool(processes=n_proc, initializer=_proc_init)
+    args = [(tm, i) for i in range(index_count)]
+    ret = pool.map(check_unconsume_2w_subproc, args)
+    pool.close()
+
+    for lst in ret:
+        for k, v in lst:
+            kv[k] = kv.get(k, 0) + v
+
+    print 'result: ---'
+    for k, v in kv.items():
+        print k, v
 
 if __name__ == '__main__':
     mult_proc()
