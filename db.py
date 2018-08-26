@@ -63,7 +63,7 @@ def mult_proc():
         pass
 
 # 把所有未消费的消息, 从备份表中捞出来放到当前表中
-# python -c "import db; db.sel_un_msg()"
+#
 def sel_un_msg():
     src = "bak_"
     db, cur = conndb()
@@ -218,6 +218,7 @@ def check_unconsume_2w():
         print k, v
 
 # 获取各主题未消费消息 最小和最大创建时间 和数量
+# python -c "import db; db.check_unconsumed()"
 def check_unconsumed_subproc(args):
     i,  = args
     sql = "select dst_topic_id, dst_cli_id, min(create_time), max(create_time), count(*) from msgidx_part_{0} where commit_time=0" \
@@ -225,8 +226,6 @@ def check_unconsumed_subproc(args):
     cur.execute(sql, )
     rows = cur.fetchall()
     return rows
-# 指定消费主题 删除索引表数据, 后续需要手工jmx重新加载内存数据
-# python -c "import db; db.check_unconsumed()"
 def check_unconsumed():
     n_proc = 20
     pool = Pool(processes=n_proc, initializer=_proc_init)

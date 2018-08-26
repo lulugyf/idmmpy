@@ -131,10 +131,10 @@ def clear_tw():
     pool = Pool(processes=20, initializer=_proc_init)
     ctime = int((time.time() - tw) * 1000)  # keep 2 weeks
     sqls = []
-    sql_tmpl = "delete messagestore_%d where createtime<%d and rownum<10001"
+    sql_tmpl = "delete messagestore_bak_%d where createtime<%d and rownum<10001"
     for i in range(body_count):
         sqls.append( ( sql_tmpl % (i, ctime), 'body', i ) )
-    sql_tmpl = "delete msgidx_part_%d where create_time<%d and rownum<10001"
+    sql_tmpl = "delete msgidx_part_bak_%d where create_time<%d and rownum<10001"
     for i in range(index_count):
         sqls.append( (sql_tmpl % (i, ctime), 'idx', i ) )
     ret = pool.map(_one_table, sqls)

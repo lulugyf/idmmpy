@@ -78,8 +78,8 @@ def parted_tables():
     for i in range(200): print sql.format (i, "msgidx_part_p", "msgidx_part", "msgidx_part_bak")
 
 # 表切换,  日期分区表和普通表的切换, 暂时没有处理表中数据
-# python -c "import data_tables as dt; dt.table_switch_go('p_', 'bak_')"
-# python -c "import data_tables as dt; dt.table_switch_go('bak_', 'p_')"
+# python -c "import data_tables as dt; dt.table_switch_go('p_', 'bak_')" >go.sql
+# python -c "import data_tables as dt; dt.table_switch_go('bak_', 'p_')" >bak.sql
 def table_switch_go(use="p_", bak="bak_"):
     print "set timing on;"
     for i in range(1000):
