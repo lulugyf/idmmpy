@@ -49,6 +49,10 @@ def selid():
     cur.execute(sql, (id, ))
     for row in cur.fetchall():
         print row
+    sql="select idmm_msg_id, dst_cli_id,dst_topic_id, create_time, commit_time-create_time, consumer_resend from msgidx_part_bak_%s where idmm_msg_id=:v" %ii[-2]
+    cur.execute(sql, (id, ))
+    for row in cur.fetchall():
+        print row
 
     print '--error:'
     sql="select idmm_msg_id, dst_cli_id,dst_topic_id, create_time, consumer_resend from msgidx_part_err where idmm_msg_id=:v"
@@ -57,16 +61,19 @@ def selid():
         print row
 
     print '--body:'
-    sql="select id, properties, content from messagestore_%s where id=:v" %ii[-1]
-    cur.execute(sql, (id, ))
-    row = cur.fetchone()
-    if row is not None:
-        prop = json.loads(row[1])
-        content = row[2].read()
-        if prop.has_key('compress') and prop['compress'] == True:
-            file('content.gz', 'w').write(content)
-            content = '[[compressed]] content.gz'
-        print row[0], row[1], content
+    id, props, content = _selcontent(cur, id)
+    if id is not None:
+        print id, props, content
+    # sql="select id, properties, content from messagestore_%s where id=:v" %ii[-1]
+    # cur.execute(sql, (id, ))
+    # row = cur.fetchone()
+    # if row is not None:
+    #     prop = json.loads(row[1])
+    #     content = row[2].read()
+    #     if prop.has_key('compress') and prop['compress'] == True:
+    #         file('content.gz', 'w').write(content)
+    #         content = '[[compressed]] content.gz'
+    #     print row[0], row[1], content
 
     db.close()
 
@@ -88,13 +95,18 @@ def _selcontent(cur, id):
     sql = "select id, properties, content from messagestore_%s where id=:v" % ii[-1]
     cur.execute(sql, (id,))
     row = cur.fetchone()
+    if row is None:
+        sql = "select id, properties, content from messagestore_bak_%s where id=:v" % ii[-1]
+        cur.execute(sql, (id,))
+        row = cur.fetchone()
     if row is not None:
         prop = json.loads(row[1])
         content = row[2].read()
         if prop.has_key('compress') and prop['compress'] == True:
             content = gzu(content)
-        return content
-    return None
+        return row[0], row[1], content
+
+    return None, None, None
 
 # 替
 def sel_orderid_err(topic, client, tag):
@@ -102,7 +114,7 @@ def sel_orderid_err(topic, client, tag):
     cur.execute('select IDMM_MSG_ID from msgidx_part_err where DST_TOPIC_ID=:v1 and DST_CLI_ID=:v2', (topic, client))
     for (id,) in cur.fetchall():
         #print id
-        content = _selcontent(cur, id)
+        _, _, content = _selcontent(cur, id)
         p = content.find(tag)
         if p < 0:
             print id, '-----not found', tag
@@ -120,7 +132,7 @@ def sel_msgbody_err(topic, client, outfile):
     f = open(outfile, "w")
     for (id,) in cur.fetchall():
         #print id
-        content = _selcontent(cur, id)
+        _, _, content = _selcontent(cur, id)
         f.write(id)
         f.write('\n')
         #print type(content)

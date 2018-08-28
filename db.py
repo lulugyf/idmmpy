@@ -247,5 +247,29 @@ def check_unconsumed():
     for k, t in topics.items():
         print tmstr(str(t[0])), tmstr(str(t[1])), t[2], k
 
+# delete后, 表的存储释放   python -c "import db; db.freetablestore()"
+# select segment_name, segment_type, sum(bytes)/1024/1024 Mbytese
+# from user_segments where  segment_name = 'MESSAGESTORE_BAK_7'
+#  group by segment_name, segment_type
+def freetablestore():
+    tables = ['MESSAGESTORE_BAK_%d'%i for i in range(1000)]
+    tables.extend(['MSGIDX_PART_BAK_%d'%i for i in range(200)])
+    db, cur = conndb()
+    for tbl in tables:
+        cur.execute("select sum(bytes)/1024/1024 Mbytese from user_segments where  segment_name =:v1", (tbl, ) )
+        sz_mb = cur.fetchone()[0]
+        t1 = time.time()
+        cur.execute("select INDEX_NAME from USER_INDEXES where table_name =:v1 and INDEX_NAME not like '%$$'", (tbl, ))
+        idx = [r[0] for r in cur.fetchall()]
+        cur.execute("alter table {0} move tablespace TBS_IDMMDB_DATA".format(tbl))
+        for ii in idx:
+            cur.execute("alter index %s rebuild" % ii)
+        cur.execute("select sum(bytes)/1024/1024 Mbytese from user_segments where  segment_name =:v1", (tbl,))
+        sz_mb1 = cur.fetchone()[0]
+        t2 = time.time()
+        print "table %s size from %d MB to %d MB  time: %.3f"%(tbl, sz_mb, sz_mb1, t2-t1)
+    cur.close()
+    db.close()
+
 if __name__ == '__main__':
     mult_proc()

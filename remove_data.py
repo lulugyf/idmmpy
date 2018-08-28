@@ -232,6 +232,8 @@ if __name__ == '__main__':
     cmd = sys.argv[1]
     if cmd == 'clear':
         clear_tw()
+        import db as dblib
+        dblib.freetablestore()
     elif cmd == 'check':
         check_unconsume_2w()
 
