@@ -248,7 +248,7 @@ def conf():
 
 def test():
     c = Conf("9")
-    bleid, topics = '5000001', '''PubPayment	TpaymentOrder	SubPayment	TpaymentOrder
+    bleid, topics = '5000001', '''PubPayment	TpaymentOrder	SubPayment	TpaymentOrderDest
 PubPayment	TpaymentOrderItem	SubPayment	TpaymentOrderItem
 PubPayment	TpaymentPayUser	SubPayment	TpaymentPayUser
 PubPayment	TpaymentRefund	SubPayment	TpaymentRefund
@@ -256,14 +256,14 @@ PubPayment	TpaymentRefundItem	SubPayment	TpaymentRefundItem
 PubPayment	TpaymentOrderNotify	SubPayment	TpaymentOrderNotify
 PubPayment	TpaymentResultNotify	SubPayment	TpaymentResultNotify
 PubPayment	TpaymentResultRedoNotify	SubPayment	TpaymentResultRedoNotify'''
-    bleid, topics = '10000002', 'Pub2  TSrc2 Sub2 TDst2'
+    bleid, topics = '70000002', 'Pub2  TSrc2 Sub2 TDst2'
     sqls = []
     for line in topics.strip().split("\n"):
         pc, pt, sc, st = line.strip().split()  # publish-client publish-topic sub-client sub-topic
         sqls.extend(c.gen_sqls(bleid, pc, pt, sc, st))
 
     for sql in sqls:
-        print("%s;"%sql)
+        print "%s;"%sql 
 
     
 if __name__ == '__main__':
