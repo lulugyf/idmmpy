@@ -261,13 +261,32 @@ def freetablestore():
         t1 = time.time()
         cur.execute("select INDEX_NAME from USER_INDEXES where table_name =:v1 and INDEX_NAME not like '%$$'", (tbl, ))
         idx = [r[0] for r in cur.fetchall()]
-        cur.execute("alter table {0} move tablespace TBS_IDMMDB_DATA".format(tbl))
+        cur.execute("alter table {0} move tablespace TBS_IDMMDB_IDX".format(tbl))  # TBS_IDMMDB_IDX  TBS_IDMMDB_DATA
         for ii in idx:
             cur.execute("alter index %s rebuild" % ii)
         cur.execute("select sum(bytes)/1024/1024 Mbytese from user_segments where  segment_name =:v1", (tbl,))
         sz_mb1 = cur.fetchone()[0]
         t2 = time.time()
         print "table %s size from %d MB to %d MB  time: %.3f"%(tbl, sz_mb, sz_mb1, t2-t1)
+    cur.close()
+    db.close()
+
+# python -c "import db; db.msgcountDate('2018-09-03 00:00:00', '2018-09-04 00:00:00')" |sort >9.3
+# python -c "import db; db.msgcountDate('2018-09-02 00:00:00', '2018-09-03 00:00:00')" |sort >9.2
+# python -c "import db; db.msgcountDate('2018-09-04 00:00:00', '2018-09-05 00:00:00')" |sort >9.4
+# python -c "import db; db.msgcountDate('2018-09-01 00:00:00', '2018-09-02 00:00:00')" |sort >9.1
+# python -c "import db; db.msgcountDate('2018-09-05 00:00:00', '2018-09-06 00:00:00')" |sort >9.5
+def msgcountDate(beg_time, end_time):
+    #
+    t1 = tmstr(beg_time)
+    t2 = tmstr(end_time)
+    db, cur = conndb()
+    sql = "select round(create_time/60000), count(*) from msgidx_part_{0} where create_time between :v1 and :v2 group by round(create_time/60000)"
+    cur.execute(sql.format("0"), (t1, t2))
+    for r in cur.fetchall():
+        t = tmstr(str(int(r[0]) * 60000))[11:16]
+        c = int(r[1]) * 200
+        print t, c
     cur.close()
     db.close()
 

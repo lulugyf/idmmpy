@@ -95,13 +95,14 @@ def lnreg():
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.xaxis.set_major_formatter(FuncFormatter(format_fn))
+    ax.grid()
     # 1.真实的点
     #plt.scatter(df['x'], df['y'], color='blue')
     plt.scatter(xs, ys, color='blue')
     # 2 拟合直线
     plt.plot(range(target), regr.predict(np.matrix(range(target)).reshape(-1, 1)), color="red")
 
-    for tdate in ('20180828101001', '20180903101001'):
+    for tdate in ('20180829101001', '20180903101001'):
         d2 = datetime.strptime(tdate, '%Y%m%d%H%M%S')
         t = d2 - d1
         x = t.days * 24 + t.seconds / 3600
@@ -112,7 +113,7 @@ def lnreg():
             '%s\n%d'%(tdate, y),
             xy=(x, y), xytext=(-20, 20),
             textcoords='offset points', ha='right', va='bottom',
-            bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+            bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.3),
             arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
 
     ax.set_ylabel('free tablespace in MB', bbox=box)
