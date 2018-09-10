@@ -146,7 +146,7 @@ def _sub_proc_statics(args):
 # python -c "import db; db.ctime_statics()" T101Order2PrmDest-B	Sub117Prm "2018-08-22 16:00:00" "2018-08-22 16:30:00"
 # cat out.txt|awk '{print $1}'|sort|uniq -c
 # cat out.txt|awk '{print $2}'|sort|uniq -c
-from tm import tmstr
+from tm import tmstr, datedelta
 def ctime_statics():
     if len(sys.argv) < 5:
         print "Usage: <topic> <cli> <begin_time> <end_time>"
@@ -271,6 +271,36 @@ def freetablestore():
     cur.close()
     db.close()
 
+# 查看表占用空间大小
+# python -c "import db; db.table_store_list()"
+def table_store_list():
+    tables = ['MESSAGESTORE_BAK_%d'%i for i in range(1000)]
+    tables.extend(['MSGIDX_PART_BAK_%d'%i for i in range(200)])
+    db, cur = conndb()
+    for tbl in tables:
+        cur.execute("select sum(bytes)/1024/1024 Mbytese from user_segments where  segment_name =:v1", (tbl, ) )
+        sz_mb = cur.fetchone()[0]
+        cur.execute("select count(*) from %s"%tbl)
+        count = cur.fetchone()[0]
+        print tbl, sz_mb, count
+    db.close()
+
+# 查看表的各分区记录数
+# python -c "import db; db.table_part_list()"
+def table_part_list():
+    db, cur = conndb()
+    for tbl, col in (("MESSAGESTORE_0", "createtime"), ("MSGIDX_PART_0", "create_time") ):
+        print "====", tbl
+        for i in range(1,32):
+            sql = "select count(*), min(%s), max(%s) from %s partition(P_%02d)"%(col, col, tbl, i)
+            cur.execute(sql )
+            r = cur.fetchone()
+            if r[0] > 0:
+                print "    P_%02d"%i, r[0], tmstr(str(r[1])), tmstr(str(r[2]))
+            else:
+                print "    P_%02d"%i, 0
+    db.close()
+
 # python -c "import db; db.msgcountDate('2018-09-03 00:00:00', '2018-09-04 00:00:00')" |sort >9.3
 # python -c "import db; db.msgcountDate('2018-09-02 00:00:00', '2018-09-03 00:00:00')" |sort >9.2
 # python -c "import db; db.msgcountDate('2018-09-04 00:00:00', '2018-09-05 00:00:00')" |sort >9.4
@@ -289,6 +319,19 @@ def msgcountDate(beg_time, end_time):
         print t, c
     cur.close()
     db.close()
+
+# 14天前的分区清理
+# python -c "import db; db.truncate_part()"
+def truncate_part():
+    # db, cur = conndb()
+    part_no = datedelta(-14)[-2:]
+    for i in range(body_count):
+        sql = "alter table messagestore_%d truncate partition P_%s"%(i, part_no)
+        print sql
+    for i in range(index_count):
+        sql = "alter table msgidx_part_%d truncate partition P_%s" %(i, part_no)
+        print sql
+
 
 if __name__ == '__main__':
     mult_proc()

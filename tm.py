@@ -1,5 +1,6 @@
 import time
 import sys
+from datetime import datetime, timedelta
 
 def _print_tmstr(t):
     print "  %s" % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(t)/1000))
@@ -13,6 +14,13 @@ def tmstr(s):
         return time.mktime(time.strptime(s, "%Y-%m-%d %H:%M:%S"))*1000
     else:
         return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(s) / 1000))
+
+# python -c "import tm; print tm.datedelta(-14)"
+def datedelta(n):
+    t = datetime.now()
+    delta = timedelta(days=n)
+    t1 = t + delta
+    return t1.strftime("%Y-%m-%d")
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
