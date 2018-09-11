@@ -31,6 +31,8 @@ SELECT NVL(b.tablespace_name,nvl(a.tablespace_name,'UNKOWN')) name,
               GROUP BY tablespace_name
             ) b
      WHERE a.tablespace_name (+) = b.tablespace_name;
+     
+select DEST_TOPIC_ID, CLIENT_ID, NOTE from topic_subscribe_rel_5;    
 '''
 
 from local_db import conndb
@@ -320,17 +322,90 @@ def msgcountDate(beg_time, end_time):
     cur.close()
     db.close()
 
+#按日 和 主题 统计消息的消费时间和数量
+# python -c "import db; db.stastics(-1)"
+def stastics_subproc(args):
+    global cur
+    i, part = args
+    t1 = time.time()
+    sql = """select dst_topic_id, dst_cli_id, count(*), round(avg(commit_time-create_time)), max(commit_time-create_time), min(commit_time-create_time)
+      from msgidx_part_%d partition (p_%s) where commit_time>0
+      group by dst_topic_id, dst_cli_id""" % (i, part)
+    cur.execute(sql, )
+    rows = cur.fetchall()
+    print i, time.time()-t1
+    return rows
+def stastics(n, topics=None):
+    st_date = datedelta(n)
+    part = st_date[-2:]
+    n_proc = 20
+    pool = Pool(processes=n_proc, initializer=_proc_init)
+    args = [(i, part) for i in range(index_count)]
+    ret = pool.map(stastics_subproc, args)
+    result = {}
+    for rows in ret:
+        for r in rows:
+            k = ",".join(r[:2])
+            c, a, mx, mn = r[2:]
+            if result.has_key(k):
+                l = result.get(k)
+                l[0] += c
+                l[1] = (l[1] + a) / 2
+                if mx > l[2]: l[2]=mx
+                if mn < l[3]: l[3]=mn
+                result[k] = l
+            else:
+                result[k] = [c, a, mx, mn]
+    if topics is None:
+        header = 'topic,count,avg(ms),max(ms),min(ms)'.split(",")
+        rows = []
+        for k, l in result.items():
+            l.insert(0, k)
+            rows.append(l)
+        return '按主题消息消费时间统计 %s'%st_date, st_date, header, rows
+    else:
+        header = 'topic,count,avg(ms),max(ms),min(ms),bleid,note'.split(",")
+        rows = []
+        for k, l in result.items():
+            l.insert(0, k)
+            nn = topics.get(k, ("[none]", "[none]"))
+            l.extend(nn)
+            rows.append(l)
+        return '按主题消息消费时间统计 %s'%st_date, st_date, header, rows
+
+
+# python -c "import db; r=db.getTopicsConf('5')"
+def getTopicsConf(ver):
+    db, cur = conndb()
+    sql = """select a.ble_id, b.client_id, a.dest_topic_id, b.max_request, b.min_timeout,
+       b.max_timeout,b.consume_speed_limit, b.max_messages, b.warn_messages, b.note
+            from BLE_DEST_TOPIC_REL_{0} a, TOPIC_SUBSCRIBE_REL_{0} b
+            where a.use_status='1' and b.use_status='1'
+            and a.dest_topic_id=b.dest_topic_id """.format(ver,)
+    # print sql
+    cur.execute(sql)
+    ret = {}
+    for r in cur.fetchall():
+        k = r[2].strip() + "," + r[1].strip()
+        note = r[-1]
+        if note is not None:
+            note = note.decode('gbk').encode('utf-8')
+        ret[k] = [r[0], note]  # [bleid, note]
+    db.close()
+    return ret
+
 # 14天前的分区清理
 # python -c "import db; db.truncate_part()"
 def truncate_part():
     # db, cur = conndb()
+    print "begin to truncate partition before 14 days...", time.strftime("%Y-%m-%d,%H:%M:%S")
     part_no = datedelta(-14)[-2:]
     for i in range(body_count):
         sql = "alter table messagestore_%d truncate partition P_%s"%(i, part_no)
-        print sql
+        print "  ", sql
     for i in range(index_count):
         sql = "alter table msgidx_part_%d truncate partition P_%s" %(i, part_no)
-        print sql
+        print "  ", sql
 
 
 if __name__ == '__main__':
