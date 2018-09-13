@@ -54,7 +54,7 @@ def page_head(title, out):
 def page_tail(out):
     out.write("\n</body></html>")
 
-
+'''
 # 生成统计数据的html页面  python -c "import pagegen as g; g.mon_page('aa.html')"
 from local_db import conf_zk_addr
 from db import stastics, getTopicsConf
@@ -87,3 +87,4 @@ def mon_page(fname):
     gentable("按bleid的消息量统计", ["bleid", "count"], [(k, v) for k, v in blecounts.items()], f)
     page_tail(f)
     f.close()
+'''

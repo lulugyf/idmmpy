@@ -12,7 +12,7 @@ def rexec(host, user, cmd):
 
 # 获取主机的基本信息
 def hostinfo(host, user, dfs):
-    out = rexec(host, user, "export TERM=vt100; echo '====='; df -k %s; echo; echo; top -b -n 1|head -15"%(" ".join(dfs)))
+    out = rexec(host, user, "export TERM=vt100; echo '==>'`hostname`; df -k %s; echo; echo; top -b -n 1|head -15"%(" ".join(dfs)))
     hinfo = {}
 
     dinfo = []
@@ -23,6 +23,8 @@ def hostinfo(host, user, dfs):
         if r is not None:
             dinfo.append({"path":dk, "total-kb":r.group(1), "available":r.group(2), "percent":r.group(4)})
     hinfo["disks"] = dinfo
+    hinfo['host'] = host
+    hinfo['hostname'] = re.compile(r'==>([^\n]+)\n').search(out).group(1)
     cpu = re.compile(r"Cpu\(s\): .+ ([\d\.]+)%id,")
     r = cpu.search(out)
     if r is not None:
@@ -34,12 +36,12 @@ def hostinfo(host, user, dfs):
         hinfo['mem-total-kb'] = r.group(1)
         hinfo['mem-free-kb'] = r.group(3)
     swap = re.compile(r"Swap: +(\d+)k +total, +(\d+)k +used, +(\d+)k +free")
-    r = mem.search(out)
+    r = swap.search(out)
     if r is not None:
         hinfo['swap-total-kb'] = r.group(1)
         hinfo['swap-free-kb'] = r.group(3)
 
-    print repr(hinfo)
+    return hinfo
 
 '''
 	   listenport=`grep netty.listen.port $$cwd/config/ble/*.properties|awk -F "=" '{print $$NF}'`;
@@ -117,9 +119,9 @@ def proc_info(host, user, paths, lsof):
                 o = json.load(s)
                 ds = []
                 proc['datasource'] = ds
-                for k, v in o['value']:   # idle: Int, active: Int, maxActive: Int, className: String, props: String
-                    v['name'] = k
-                    ds.append(v)
+                for k, v in o['value'].items():   # idle: Int, active: Int, maxActive: Int, className: String, props: String
+                    d = {"name":k, "idle":v["idle"], "active":v["active"], "maxActive":v["maxActive"]}
+                    ds.append(d)
                 break
             except:
                 pass
@@ -129,8 +131,8 @@ def proc_info(host, user, paths, lsof):
 def main():
     host, user = "172.21.0.46", "crmpdscm"
     #print rexec("172.21.0.46", "crmpdscm", "export TERM=vt100; echo '====='; df -k /crmpdscm ; echo; echo; top -b -n 1|head -15")
-    #hostinfo("172.21.0.46", "crmpdscm", ["/crmpdscm", "/crmpdscmweb"])
-    proc_info(host, user, ['/crmpdscm/idmm3/broker0'], "/usr/sbin/lsof")
+    hostinfo("172.21.0.46", "crmpdscm", ["/crmpdscm", "/crmpdscmweb"])
+    #proc_info(host, user, ['/crmpdscm/idmm3/broker0'], "/usr/sbin/lsof")
 
 if __name__ == '__main__':
     main()
