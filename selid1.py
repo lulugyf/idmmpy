@@ -9,7 +9,7 @@ import cx_Oracle
 import sys
 import json
 from tm import tmstr
-
+from multiprocessing import Pool
 
 # def conndb():
 #     #import data_decrypt
@@ -37,6 +37,11 @@ def tm():
             _print_tm(s)
         else:
             _print_tmstr(s)
+
+def _proc_init():
+    global db
+    global cur
+    db, cur = conndb()
 
 # 查询单个消息,  分别从索引表 错误表 和 body表查,  如果遇到压缩的content, 则保存到文件中
 def selid():
@@ -240,36 +245,24 @@ def selids(fname):
 import re
 # 按主题 和 时间取消息体中的局部数据
 # python -c "import selid1; selid1.dumpTopcByTime('T103DataSynBOSSADest-A', 'Sub109DataSyn', '2018-09-05 06:30:00', '2018-09-05 10:10:00', 'T103DataSynBOSSADest-A.out')"
+# python -c "import selid1; selid1.dumpTopcByTime('T103DataSynBOSSBDest-B', 'Sub109DataSyn', '2018-09-12 16:30:00', '2018-09-12 17:20:00', 'a.out')"
 #
 # python tm.py "2018-09-05 12:00:00"
 # cat T103DataSynBOSSADest-A.out.id|awk '{if($4> 1536120000000) print $0}'
-def dumpTopcByTime(topic, client, tm_begin, tm_end, outfile):
-    db, cur = conndb()
-    fo = open(outfile + ".id", "w")
-    t1 = tmstr(tm_begin)
-    t2 = tmstr(tm_end)
-    for i in range(200):
-        print 'table--', i
-        ct = 0
-        cur.execute(
-            'select idmm_msg_id, group_id, create_time, commit_time from msgidx_part_%d where DST_TOPIC_ID=:v1 and DST_CLI_ID=:v2 and create_time between :v3 and :v4' % i,
-            (topic, client, int(t1), int(t2)))
-        while True:
-            rows = cur.fetchmany(300)
-            if rows is None or len(rows) == 0:
-                break
-            ct += len(rows)
-            for r in rows:
-                fo.write("{0} {1} {2} {3}\n".format(*r))
-        print '   rows: ', ct
-    fo.close()
-
-    fo = open(outfile, "w")
+def dumpTopcByTime_sub(args):
+    topic, client, t1, t2, i, outfile = args
+    global cur
+    print 'table--', i
     rr = re.compile(",\"PHONE_NO\":\"([\\d]+)\",")
     rr1 = re.compile(',\"ServiceNo\":\"([\\d]+)\",')
-    for line in open(outfile + ".id"):
-        flds = line.strip().split()
-        id = flds[0]
+    cur.execute(
+        'select idmm_msg_id, group_id, create_time, commit_time from msgidx_part_%d where DST_TOPIC_ID=:v1 and DST_CLI_ID=:v2 and create_time between :v3 and :v4 and commit_time=0' % i,
+        (topic, client, t1, t2))
+    fo = open(outfile, "a")
+    ct = 0
+    for r in cur.fetchall():
+        ct += 1
+        id = r[0]
         body = _selcontent(cur, id)
         body = body[2]
         ph = "[not found]"
@@ -281,10 +274,20 @@ def dumpTopcByTime(topic, client, tm_begin, tm_end, outfile):
                 r = rr1.search(body)
                 if r is not None:
                     ph = r.group(1)
-            #print '----', ph
-        fo.write("%s %s\n"%(id, ph))
+        fo.write("%s %s\n" % (id, ph))
     fo.close()
-    db.close()
+    return i, ct
+def dumpTopcByTime(topic, client, tm_begin, tm_end, outfile):
+    n_proc = 20
+    db, cur = conndb()
+    fo = open(outfile + ".id", "w")
+    t1 = tmstr(tm_begin)
+    t2 = tmstr(tm_end)
+    args = [(topic, client, int(t1), int(t2), i, outfile) for i in range(200)]
+    pool = Pool(processes=n_proc, initializer=_proc_init)
+    ret = pool.map(dumpTopcByTime_sub, args)
+    for r in ret:
+        print r
 
 # python selid1.py seltopic T101RptOrderLineDest-B Sub111RptOrderLine T101RptOrderLineDest-B.txt
 # python -c "import selid1 as s; s.get_mapping('mapping.txt')"

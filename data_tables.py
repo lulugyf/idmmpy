@@ -73,7 +73,8 @@ def parted_tables():
     	) tablespace TBS_IDMMDB_DATA;
     create index {1}_{0}_idx0 on {1}_{0} (IDMM_MSG_ID, DST_CLI_ID, DST_TOPIC_ID) LOCAL tablespace TBS_IDMMDB_IDX storage(initial 64K);
     create Index mi{1}_{0}_idx1 on {1}_{0}(dst_cli_id,dst_topic_id) LOCAL tablespace TBS_IDMMDB_IDX storage(initial 64K);
-    create Index mi{1}_{0}_idx2 on {1}_{0}(create_time) LOCAL tablespace TBS_IDMMDB_IDX storage(initial 64K);'''
+    create Index mi{1}_{0}_idx2 on {1}_{0}(create_time) LOCAL tablespace TBS_IDMMDB_IDX storage(initial 64K);
+    create Index mi{1}_{0}_idx3 on {1}_{0}(dst_cli_id,dst_topic_id,commit_time) LOCAL tablespace TBS_IDMMDB_IDX storage(initial 64K);'''
 
     for i in range(200): print sql.format (i, "msgidx_part_p", "msgidx_part", "msgidx_part_bak")
 
