@@ -5,10 +5,15 @@ import subprocess as sb
 import re
 import urllib2
 import json
+import sys
 
 def rexec(host, user, cmd):
-    output = sb.check_output(["ssh", "%s@%s"%(user, host), cmd])
-    return output
+    try:
+        output = sb.check_output(["ssh", "%s@%s"%(user, host), cmd], shell=False)
+        return output
+    except sb.CalledProcessError, x:
+        sys.stderr.write("failed!  return code=%s" % x.returncode)
+        return x.output
 
 # 获取主机的基本信息
 def hostinfo(host, user, dfs):
@@ -79,9 +84,9 @@ def proc_info(host, user, paths, lsof, jmx_ports=None):
             if r is None: break
             pos = r.end()
             listen_ports.append(r.group(1))
-        if len(listen_ports) > 2:
+        if len(listen_ports) >= 3:
             proc['proc-type'] = "Broker"
-        else:
+        elif len(listen_ports) == 2:
             proc['proc-type'] = "BLE"
         proc['listen-ports'] = listen_ports
 
@@ -131,6 +136,18 @@ def proc_info(host, user, paths, lsof, jmx_ports=None):
 
     #print(procs)
     return procs
+
+def shutdown_all(host, user, paths):
+    scripts = ["%s/bin/broker/shutdown.sh"%p for p in paths ]
+    scripts.extend(["%s/bin/ble/shutdown.sh"%p for p in paths])
+    cmd = ";\n".join( scripts )
+    return rexec(host, user, cmd)
+
+def startup_all(host, user, paths):
+    scripts = ["%s/bin/broker/startup.sh" % p for p in paths]
+    scripts.extend(["%s/bin/ble/startup.sh" % p for p in paths])
+    cmd = ";\n".join( scripts )
+    return rexec(host, user, cmd)
 
 def main():
     host, user = "172.21.0.46", "crmpdscm"

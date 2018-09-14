@@ -1,57 +1,26 @@
 #coding=utf-8
 
-import bobo
-import webob
 import os
-import sys
-sys.path.insert(0, os.getcwd())
-sys.path.insert(0, os.getcwd()+"/..")
-print("--cwd: %s"%os.getcwd())
-import pagegen as pg
 import json
-import rsh
-
-import zk
-from cStringIO import StringIO
 from multiprocessing import Pool
+from cStringIO import StringIO
 
-def genResp():
-    r = webob.Response()
-    r.content_type = "text/html; charset=utf-8"
-    r.headers.add("Connection", "Close")
-    return r
+from flask import Flask
 
-@bobo.query("/")
-def root():
-    return "hello world!"
+import pagegen as pg
+import rsh
+import zk
 
-@bobo.query("/exit")
+app=Flask(__name__)
+
+@app.route('/')
+def hello_world():
+    return 'Hello World!'
+
+@app.route("/exit")
 def exit():
     print("exit from web!!!!!!")
     os._exit(0)
-
-def submap(func, arg_list, init_func=None):
-    n_proc = len(arg_list)
-    pool = Pool(processes=n_proc, initializer=init_func)
-    ret = pool.map(func, arg_list)
-    pool.close()
-
-
-@bobo.query("/proc1")
-def proc1(bobo_request):
-    r = StringIO()
-    pg.page_head("IDMM 进程信息", r)
-
-    conf = json.load(open("conf.json"))
-    hinfos = [  rsh.hostinfo(h['ipaddr'], h['user'], h['diskpath']) for h in conf['host-list'] ]
-    pg.gentable("主机信息",
-                ["hostname", "ipaddr", "cpu-idle", "disks", "mem-free-kb", "mem-used", "swap-free-kb", "swap-used"],
-                [(h['hostname'], h['host'], h['cpu-idle']+" %", "<br>".join([ "%s %s %s %%"%(d['path'], d['available'], d['percent']) for d in h["disks"]]),
-                  h['mem-free-kb'],  "%.2f %%"%((h['mem-total-kb']-h['mem-free-kb'])*100.0/h['mem-total-kb']),
-                  h['swap-free-kb'], "%.2f %%"%((h['swap-total-kb']-h['swap-free-kb'])*100.0/h['swap-total-kb']) ) for h in hinfos], r)
-
-    pg.page_tail(r)
-    return r.getvalue()
 
 def _proc1(args):
     return rsh.proc_info(*args)
@@ -59,9 +28,9 @@ def _proc1(args):
 def _proc2(args):
     return rsh.hostinfo(*args)
 
-@bobo.query("/proc")
+@app.route("/proc")
 def proc():
-    r = genResp()
+    r = StringIO()
     pg.page_head("IDMM 进程信息", r)
 
     conf = json.load(open("conf.json"))
@@ -127,9 +96,9 @@ def proc():
     r.write("</br><div><a href='/killall' target='_blank'>shutdown all processes</a></div>")
     r.write("</br><div><a href='/startall' target='_blank'>startup all processes</a></div>")
     pg.page_tail(r)
-    return r
+    return r.getvalue()
 
-@bobo.query("/killall", content_type='text/plain; charset=utf-8')
+@app.route("/killall")
 def killall():
     r = StringIO()
     conf = json.load(open("conf.json"))
@@ -139,7 +108,7 @@ def killall():
         r.write("\n")
     return r.getvalue()
 
-@bobo.query("/startall", content_type='text/plain; charset=utf-8')
+@app.route("/startall")
 def startall():
     r = StringIO()
     conf = json.load(open("conf.json"))
@@ -149,7 +118,7 @@ def startall():
         r.write("\n")
     return r.getvalue()
 
-@bobo.query("/qinfo")
+@app.route("/qinfo")
 def qinfo():
     import ble
     import operator
@@ -180,3 +149,6 @@ def qinfo():
 
     pg.page_tail(r)
     return r.getvalue()
+
+if __name__=='__main__':
+    app.run(host='0.0.0.0', port=8183)
