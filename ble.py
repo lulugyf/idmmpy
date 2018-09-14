@@ -20,6 +20,7 @@ class qinfo:
         self.err = jobj['err']
         self.bleid = bleid
         self.addr = addr
+        self.status = jobj['status']
 
 def listQ(zkaddr):
     addrfile = getpath('.ble.list')
@@ -208,8 +209,9 @@ def mem(zkaddr):
         print id, '\t', "{0:.3f} MB/{1:.3f} MB {2:.2f} %".format(o1['used']/1024.0/1024,
                                     o1['max']/1024.0/1024, o1['used']*100.0/o1['max'])
 
-from local_db import conf_zk_addr
+
 if __name__ == '__main__':
+    from local_db import conf_zk_addr
     #zkaddr = '172.21.0.46:3181'
     zkaddr = conf_zk_addr()
     qmon(zkaddr)

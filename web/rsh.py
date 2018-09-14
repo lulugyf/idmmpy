@@ -13,7 +13,7 @@ def rexec(host, user, cmd):
 # 获取主机的基本信息
 def hostinfo(host, user, dfs):
     out = rexec(host, user, "export TERM=vt100; echo '==>'`hostname`; df -k %s; echo; echo; top -b -n 1|head -15"%(" ".join(dfs)))
-    hinfo = {}
+    hinfo = {'hostname':"", 'cpu-idle':"", "disks":[], 'mem-free-kb':0, 'mem-total-kb':1, 'swap-total-kb':1, 'swap-free-kb':0}
 
     dinfo = []
     for dk in dfs:
@@ -33,13 +33,13 @@ def hostinfo(host, user, dfs):
     mem = re.compile(r"Mem: +(\d+)k +total, +(\d+)k +used, +(\d+)k +free")
     r = mem.search(out)
     if r is not None:
-        hinfo['mem-total-kb'] = r.group(1)
-        hinfo['mem-free-kb'] = r.group(3)
+        hinfo['mem-total-kb'] = int(r.group(1))
+        hinfo['mem-free-kb'] = int(r.group(3))
     swap = re.compile(r"Swap: +(\d+)k +total, +(\d+)k +used, +(\d+)k +free")
     r = swap.search(out)
     if r is not None:
-        hinfo['swap-total-kb'] = r.group(1)
-        hinfo['swap-free-kb'] = r.group(3)
+        hinfo['swap-total-kb'] = int(r.group(1))
+        hinfo['swap-free-kb'] = int(r.group(3))
 
     return hinfo
 
@@ -51,7 +51,7 @@ def hostinfo(host, user, dfs):
 	   echo "#%DATASOURCE:"; curl "http://localhost:$$jmxport/jolokia/exec/com.sitech.crmpd.idmm:name=dsMon/dsinfo" 2>/dev/null; echo "";
 '''
 # 获取IDMM ble broker进程信息
-def proc_info(host, user, paths, lsof):
+def proc_info(host, user, paths, lsof, jmx_ports=None):
     cmd = """cat %s %s|while read pid; do echo "##PS:";
 	   ls -l /proc/$pid/cwd;
 	   %s -p $pid -P|grep TCP|awk '{print $(NF-1), $(NF)}';
@@ -61,7 +61,7 @@ def proc_info(host, user, paths, lsof):
     out = rexec(host, user, cmd)
     procs = []
     for s in out.split("##PS:")[1:]:
-        proc = {}
+        proc = {"host":"", "pid":"[not exists]", "cwd":"", "start-time":"", "proc-type":"", "listen-ports":"", "jmxport":"", "tcp-in":[], "tcp-out":[], "datasource":[]}
         procs.append(proc)
         s = s.strip()
         #lines = s.split("\n")
@@ -102,9 +102,12 @@ def proc_info(host, user, paths, lsof):
                 tcp_out.append((lport, rhost, rport))
         proc['tcp-in'] = tcp_in
         proc['tcp-out'] = tcp_out
+        proc['host'] = host
 
         # 测试寻找jmx端口, 然后向jmx端口查询其它的参数
         for port in ports:
+            if jmx_ports is not None and port not in jmx_ports:
+                continue
             try:
                 url = 'http://%s:%s/jolokia/read/java.lang:type=Memory'%(host, port)
                 s = urllib2.urlopen(url)
@@ -126,13 +129,14 @@ def proc_info(host, user, paths, lsof):
             except:
                 pass
 
-    print procs
+    #print(procs)
+    return procs
 
 def main():
     host, user = "172.21.0.46", "crmpdscm"
     #print rexec("172.21.0.46", "crmpdscm", "export TERM=vt100; echo '====='; df -k /crmpdscm ; echo; echo; top -b -n 1|head -15")
-    hostinfo("172.21.0.46", "crmpdscm", ["/crmpdscm", "/crmpdscmweb"])
-    #proc_info(host, user, ['/crmpdscm/idmm3/broker0'], "/usr/sbin/lsof")
+    #hostinfo("172.21.0.46", "crmpdscm", ["/crmpdscm", "/crmpdscmweb"])
+    proc_info(host, user, ['/crmpdscm/idmm3/broker0'], "/usr/sbin/lsof")
 
 if __name__ == '__main__':
     main()

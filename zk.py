@@ -117,7 +117,29 @@ def checkStartInfo(zkAddr, taskname, zkRoot='/db_sync_all'):
             break
         print 'already exists, sleep'
         time.sleep(5.0)
-        
+
+def get_jmxaddr(zkaddr):
+    z = ZKCli(zkaddr)
+    z.start()
+    z.wait()
+
+    ble_jmx = []
+    base = '/idmm/ble'
+    for p in z.list(base):
+        data = z.get(base + '/' + p)
+        data1 = data[0]
+        bleid = p[p.find('.') + 1:]
+        jmxaddr = data1[0:data1.find(':')] + data1[data1.rfind(':'):]
+        ble_jmx.append((bleid, jmxaddr))
+    broker_jmx = []
+    base = '/idmm/broker'
+    for p in z.list(base):
+        data = z.get(base + '/' + p)
+        data1 = data[0]
+        data1 = data1[7: data1.find('/',8)]  # http://???:???/jolokia/
+        broker_jmx.append((p, data1))
+    z.close()
+    return ble_jmx, broker_jmx
     
 def main():
     zk = ZKCli('172.21.1.36:52181')
