@@ -5,20 +5,10 @@
 
 import string
 import time
-import cx_Oracle
 import sys
 import json
 from tm import tmstr
 from multiprocessing import Pool
-
-# def conndb():
-#     #import data_decrypt
-#     #passwd=data_decrypt.decryptData_auth()
-#     # IDMMOPR/ykRwj_b6@idmmdb1
-#     passwd = 'ykRwj_b6'
-#     db=cx_Oracle.connect('idmmopr',passwd,'idmmdb2')
-#     cur=db.cursor()
-#     return db, cur
 
 from local_db import conndb
 
@@ -250,16 +240,21 @@ import re
 # python tm.py "2018-09-05 12:00:00"
 # cat T103DataSynBOSSADest-A.out.id|awk '{if($4> 1536120000000) print $0}'
 def dumpTopcByTime_sub(args):
-    topic, client, t1, t2, i, outfile = args
+    i, topic, client, t1, t2, status, patterns = args
     global cur
     print 'table--', i
-    rr = re.compile(",\"PHONE_NO\":\"([\\d]+)\",")
-    rr1 = re.compile(',\"ServiceNo\":\"([\\d]+)\",')
+    patterns = [ re.compile(f.strip()) for f in patterns.split("\r\n")]
+    # rr = re.compile(",\"PHONE_NO\":\"([\\d]+)\",")
+    # rr1 = re.compile(',\"ServiceNo\":\"([\\d]+)\",')
+    msg_stat = ""
+    if status=="1": msg_stat = ""  # all
+    elif status == "2": msg_stat=" and commit_time=0"
+    elif status == "3": msg_stat="and commit_time>0"
     cur.execute(
-        'select idmm_msg_id, group_id, create_time, commit_time from msgidx_part_%d where DST_TOPIC_ID=:v1 and DST_CLI_ID=:v2 and create_time between :v3 and :v4 and commit_time=0' % i,
+        'select idmm_msg_id, group_id, create_time, commit_time from msgidx_part_%d where DST_TOPIC_ID=:v1 and DST_CLI_ID=:v2 and create_time between :v3 and :v4 %s' %( i, msg_stat),
         (topic, client, t1, t2))
-    fo = open(outfile, "a")
     ct = 0
+    ret = []
     for r in cur.fetchall():
         ct += 1
         id = r[0]
@@ -267,27 +262,25 @@ def dumpTopcByTime_sub(args):
         body = body[2]
         ph = "[not found]"
         if body is not None:
-            r = rr.search(body)
-            if r is not None:
-                ph = r.group(1)
-            else:
-                r = rr1.search(body)
+            for rr in patterns:
+                r = rr.search(body)
                 if r is not None:
                     ph = r.group(1)
-        fo.write("%s %s\n" % (id, ph))
-    fo.close()
-    return i, ct
-def dumpTopcByTime(topic, client, tm_begin, tm_end, outfile):
+                    break
+        ret.append("%s %s" % (id, ph))
+    return ret
+def dumpTopcByTime(topic, client, tm_begin, tm_end, status, patterns, table_count):
     n_proc = 20
     db, cur = conndb()
-    fo = open(outfile + ".id", "w")
     t1 = tmstr(tm_begin)
     t2 = tmstr(tm_end)
-    args = [(topic, client, int(t1), int(t2), i, outfile) for i in range(200)]
+    args = [(i, topic, client, int(t1), int(t2), status, patterns) for i in range(table_count)]
     pool = Pool(processes=n_proc, initializer=_proc_init)
     ret = pool.map(dumpTopcByTime_sub, args)
+    result = []
     for r in ret:
-        print r
+        result.extend(r)
+    return result
 
 # python selid1.py seltopic T101RptOrderLineDest-B Sub111RptOrderLine T101RptOrderLineDest-B.txt
 # python -c "import selid1 as s; s.get_mapping('mapping.txt')"

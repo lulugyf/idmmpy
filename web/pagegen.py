@@ -2,6 +2,8 @@
 
 # 产生html page的页面
 
+import time
+
 # 产生table
 def gentable(title, header, rows, out):
     out.write("<h1> &sect; %s </h1>\n"%title)
@@ -50,6 +52,7 @@ def page_head(title, out):
         }
     </style>""")
     out.write("</head><body>\n")
+    out.write('<a href="/">返回首页</a></br>\n')
 
 def page_tail(out):
     out.write("\n</body></html>")
@@ -88,3 +91,29 @@ def mon_page(fname):
     page_tail(f)
     f.close()
 '''
+
+def loginpage():
+    return """<html><head><meta charset=\"utf-8\"><title>kill proc confirm</title></head><body>
+    <form method="POST" name="auth" action="/killall" >
+    pass code: <input type="password" name="pass" /> </br>
+    <input type="submit" value="submit" />
+    </form>
+    </body></html>"""
+
+def getmsgpage():
+    return """<html><head><meta charset=\"utf-8\"><title>input some properties</title></head><body>
+    <h1>提取消息数据:</h1>
+    <form method="POST" name="getmsg" action="/getmsg" target="_blank" >
+    目标主题: <input name="topic" /> </br>
+    消费者id: <input name="client" /> </br>
+    开始时间: <input name="begin_time" value="{0}" /> <font color="red">格式: yyyy-mm-dd HH:MM:SS</font></br>
+    结束时间: <input name="end_time" /> <font color="red">留空为到当前时间, 格式同上</font> </br>
+    消息状态: <select name="msgstatus">
+    <option value="2">未消费</option><option value="1">全部</option><option value="3">已消费</option></select> </br>
+    号码正则表达式: <textarea name="patterns" cols="40" rows="5">,\"PHONE_NO\":\"([\\d]+)\",
+,\"ServiceNo\":\"([\\d]+)\",</textarea>
+      <font color="red">在消息content中提取号码的正则表达式, 每行一个, 依次尝试</font> </br>
+     </br>
+    <input type="submit" value="submit" />
+    </form>
+    </body></html>""".format(time.strftime("%Y-%m-%d %H:%M:%S"), )

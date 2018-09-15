@@ -4,18 +4,66 @@ import os
 import json
 from multiprocessing import Pool
 from cStringIO import StringIO
+import time
 
-from flask import Flask
+from flask import Flask, request
 
 import pagegen as pg
 import rsh
 import zk
+import settings as conf
 
 app=Flask(__name__)
+#app.config['DEBUG'] = True
 
 @app.route('/')
 def hello_world():
     return 'Hello World!'
+
+@app.route("/getmsg", methods=["POST", "GET"])
+def getmsg():
+    if request.method == 'POST':
+        import selid1
+        fm = request.form
+        params = {k:v for k, v in fm.items()}
+        if len(params['end_time'].strip()) == 0:
+            params['end_time'] = time.strftime("%Y-%m-%d %H:%M:%S")
+        # def dumpTopcByTime(topic, client, tm_begin, tm_end, status, patterns, table_count):
+        return "<pre>" + "\n".join(selid1.dumpTopcByTime(
+            params['topic'], params['client'], params['begin_time'], params['end_time'],
+            params['status'], params['patterns'], conf.index_table_count
+        )) + "</pre>"
+    else:
+        return pg.getmsgpage()
+
+@app.route("/killall", methods=["POST", "GET"])
+def killall():
+    if request.method == 'POST':
+        if request.form["pass"] != "123":
+            return "!!! forbiden"
+        r = StringIO()
+        r.write("<pre>")
+        for h in conf.host_list:
+            r.write("---host: %s path: %s\n"%(h['ipaddr'], h['deploypath']))
+            r.write(rsh.shutdown_all(h['ipaddr'], h['user'], h['deploypath']))
+            r.write("\n")
+        r.write("</pre>")
+        return r.getvalue()
+    else:
+        return pg.loginpage()
+
+@app.route("/startall")
+def startall():
+    r = StringIO()
+    r.write("<pre>")
+    for h in conf.host_list:
+        r.write("---host: %s path: %s\n" % (h['ipaddr'], h['deploypath']))
+        r.write(rsh.startup_all(h['ipaddr'], h['user'], h['deploypath']))
+        r.write("\n")
+    r.write("</pre>")
+    return r.getvalue()
+
+
 
 @app.route("/exit")
 def exit():
@@ -32,10 +80,7 @@ def _proc2(args):
 def proc():
     r = StringIO()
     pg.page_head("IDMM 进程信息", r)
-
-    conf = json.load(open("conf.json"))
-
-    args = [ (h['ipaddr'], h['user'], h['diskpath']) for h in conf['host-list']]
+    args = [ (h['ipaddr'], h['user'], h['diskpath']) for h in conf.host_list]
     if len(args) > 1:
         pool = Pool(processes=len(args))
         hinfos = pool.map(_proc2, args)
@@ -52,7 +97,7 @@ def proc():
                   "%.2f %%" % ((h['swap-total-kb'] - h['swap-free-kb']) * 100.0 / h['swap-total-kb'])) for h in hinfos],
                 r)
 
-    ble_jmx, broker_jmx = zk.get_jmxaddr(conf['zookeeper'])
+    ble_jmx, broker_jmx = zk.get_jmxaddr(conf.zookeeper)
     broker_jmx.extend(ble_jmx)
     jmx_ports = {}
     for a in broker_jmx:
@@ -70,7 +115,7 @@ def proc():
     # _ = [ procinfo.extend(rsh.proc_info(h['ipaddr'], h['user'], h['deploypath'], h['lsof'], jmx_ports.get(h['ipaddr'], None)) )
     #       for h in conf['host-list'] ]
     args = [ (h['ipaddr'], h['user'], h['deploypath'], h['lsof'], jmx_ports.get(h['ipaddr'], None) )
-          for h in conf['host-list'] ]
+          for h in conf.host_list ]
     if len(args) > 1:
         pool = Pool(processes=len(args))
         ret = pool.map(_proc1, args)
@@ -98,25 +143,6 @@ def proc():
     pg.page_tail(r)
     return r.getvalue()
 
-@app.route("/killall")
-def killall():
-    r = StringIO()
-    conf = json.load(open("conf.json"))
-    for h in conf['host-list']:
-        r.write("---host: %s path: %s\n"%(h['ipaddr'], h['deploypath']))
-        r.write(rsh.shutdown_all(h['ipaddr'], h['user'], h['deploypath']))
-        r.write("\n")
-    return r.getvalue()
-
-@app.route("/startall")
-def startall():
-    r = StringIO()
-    conf = json.load(open("conf.json"))
-    for h in conf['host-list']:
-        r.write("---host: %s path: %s\n" % (h['ipaddr'], h['deploypath']))
-        r.write(rsh.startup_all(h['ipaddr'], h['user'], h['deploypath']))
-        r.write("\n")
-    return r.getvalue()
 
 @app.route("/qinfo")
 def qinfo():
@@ -150,5 +176,34 @@ def qinfo():
     pg.page_tail(r)
     return r.getvalue()
 
+
+import m5_mon as mon
+
+
+@app.route("/qinfo1")
+def qinfo1():
+    import ble
+    import operator
+    import time
+
+    conf = json.load(open("conf.json"))
+    zkaddr = conf['zookeeper']
+    qlist = ble.listQ(zkaddr)
+    qlist = sorted(qlist, key=operator.attrgetter('size', 'err', 'total'), reverse=True)
+
+    r = StringIO()
+    title = "IDMM 队列积压监控, 采集时间 %s"%(time.strftime("%Y-%m-%d-%H:%M:%S"))
+    pg.page_head(title, r)
+
+    headers = "BLE-ID 消息主题 消费者ID 总量 积压 失败 在途 status 5m生产 5m消费".split()
+    mon.get_mon(qlist)
+    pg.gentable(title,
+                headers,
+                [(q.bleid, q.topic, q.client, q.total, q.size, q.err, q.sending, q.status, q.m5_prod, q.m5_cons) for q in qlist ],  #if q.topic=='TDst2'
+                r)
+    pg.page_tail(r)
+    return r.getvalue()
+
 if __name__=='__main__':
-    app.run(host='0.0.0.0', port=8183)
+    mon.start_mon(conf.zookeeper, conf.minutes_data_dir)
+    app.run(host='0.0.0.0', port=8183, debug=True)

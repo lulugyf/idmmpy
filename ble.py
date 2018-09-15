@@ -21,35 +21,50 @@ class qinfo:
         self.bleid = bleid
         self.addr = addr
         self.status = jobj['status']
+        self.m5_prod = 0
+        self.m5_cons = 0
+
+def get_jmxaddr(zkaddr, ble_only=False):
+    z = zk.ZKCli(zkaddr)
+    z.start()
+    z.wait()
+
+    ble_ports = []
+    base = '/idmm/ble'
+    for p in z.list(base):
+        data = z.get(base + '/' + p)
+        data1 = data[0]
+        bleid = p[p.find('.') + 1:]
+        jmxaddr = data1[0:data1.find(':')] + data1[data1.rfind(':'):]
+        ble_ports.append((bleid, jmxaddr))
+    if ble_only:
+        return ble_ports
+    broker_ports = []
+    base = '/idmm/broker'
+    for p in z.list(base):
+        data = z.get(base + '/' + p)
+        data1 = data[0]
+        data1 = data1[7:data1.find('/',8)]
+        broker_ports.append((p, data1))  # http://???:??/jolokia
+    z.close()
+    return ble_ports, broker_ports
 
 def listQ(zkaddr):
-    addrfile = getpath('.ble.list')
-    print '-----', addrfile
-    need_refresh_addrlist = False
-    try:
-        st = os.stat(addrfile)
-        if time.time() - st.st_mtime > 3600.0:
-            need_refresh_addrlist = True
-    except:
-        need_refresh_addrlist = True
-    if need_refresh_addrlist:
-        getaddrs(zkaddr)
-
     q = []
-    for line in file(addrfile):
-        d = line.strip().split()
-        if len(d) < 3:
-            continue
-        bleid, jmxaddr, dataaddr = d
+    addrs = get_jmxaddr(zkaddr, ble_only=True)
+    # print repr(addrs)
+    for bleid, jmxaddr in get_jmxaddr(zkaddr, ble_only=True):
         url = 'http://%s/jolokia/exec/com.sitech.crmpd.idmm.ble.RunTime:name=runTime/info' % jmxaddr
         s = urllib2.urlopen(url)
         o = json.load(s)
         o1 = json.loads(o['value'])
-        #print '====(%s)' % jmxaddr, bleid
-        last_topic, last_client = "", ""
         for o in o1:
-            q.append(qinfo(o, bleid, dataaddr))
+            q.append(qinfo(o, bleid, ""))  #data_addr
     return q
+
+# if __name__ == '__main__':
+#     listQ("172.21.0.46:3181")
+#     os._exit(0)
 
 # 获取节点信息， 从zk中同步获取
 def getnodeinfo(zkaddr):
@@ -175,27 +190,7 @@ def qmon(zkaddr):
     print '--total--size--sending'
     print '%d\t%d\t%d'%(stat[0], stat[1], stat[2])
 
-def get_jmxaddr(zkaddr):
-    z = zk.ZKCli(zkaddr)
-    z.start()
-    z.wait()
 
-    ble_ports = []
-    base = '/idmm/ble'
-    for p in z.list(base):
-        data = z.get(base + '/' + p)
-        data1 = data[0]
-        bleid = p[p.find('.') + 1:]
-        jmxaddr = data1[0:data1.find(':')] + data1[data1.rfind(':'):]
-        ble_ports.append((bleid, 'http://'+jmxaddr+'/jolokia/'))
-    broker_ports = []
-    base = '/idmm/broker'
-    for p in z.list(base):
-        data = z.get(base + '/' + p)
-        data1 = data[0]
-        broker_ports.append((p, data1))
-    z.close()
-    return ble_ports, broker_ports
 
 def mem(zkaddr):
     ble_ports, broker_ports = get_jmxaddr(zkaddr)
