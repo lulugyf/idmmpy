@@ -110,9 +110,11 @@ def proc_info(host, user, paths, lsof, jmx_ports=None):
         proc['host'] = host
 
         # 测试寻找jmx端口, 然后向jmx端口查询其它的参数
-        for port in ports:
-            if jmx_ports is not None and port not in jmx_ports:
-                continue
+        if jmx_ports is not None:
+            _ports = [p for p in ports if p in jmx_ports]
+        if len(_ports) < 1:
+            _ports = ports
+        for port in _ports:
             try:
                 url = 'http://%s:%s/jolokia/read/java.lang:type=Memory'%(host, port)
                 s = urllib2.urlopen(url)
@@ -148,6 +150,55 @@ def startup_all(host, user, paths):
     scripts.extend(["%s/bin/ble/startup.sh" % p for p in paths])
     cmd = ";\n".join( scripts )
     return rexec(host, user, cmd)
+
+
+def tail(f, n, offset=0):
+    """Reads a n lines from f with an offset of offset lines."""
+    avg_line_length = 74
+    to_read = n + offset
+    while 1:
+        try:
+            f.seek(-(avg_line_length * to_read), 2)
+        except IOError:
+            # woops.  apparently file is smaller than what we want
+            # to step back, go to the beginning instead
+            f.seek(0)
+        pos = f.tell()
+        lines = f.read().splitlines()
+        if len(lines) >= to_read or pos == 0:
+            return lines[-to_read:offset and -offset or None]
+        avg_line_length *= 1.3
+
+# 表空间采集日志读取，  采集方法： db.tablespace_mon(),  间隔: 1hour
+# 返回
+# 20180823011001
+# TBS_IDMMDB_IDX	5.898%	780518MB	829440MB
+# TBS_IDMMDB_DATA	28.255%	749366MB	1044480MB
+def read_tbs_log(fpath, tbs_names, count=24):
+    with open(fpath) as f:
+        lines = tail(f, count*3)
+    rows = []
+    flds = None
+    rr = re.compile(r"[^\t]+\t([\d\.]+)\%\t(\d+)MB\t(\d+)MB")  # print "{0}\t{1:.3f}%\t{2:.0f}MB\t{3:.0f}MB".format(*r)
+    for line in lines:
+        if line.startswith("2"):
+            if flds is not None:
+                rows.append(flds)
+            flds = [line.strip()]
+            flds.extend([None for i in range(len(tbs_names))])
+        else:
+            for i in range(len(tbs_names)):
+                tn = tbs_names[i]
+                if line.startswith(tn):
+                    if flds is None: break
+                    r = rr.search(line)
+                    if r is not None:
+                        f = r.groups()
+                        flds[i+1] = [f[0], int(f[1]), int(f[2])-int(f[1])]
+                    break
+    if flds is not None:
+        rows.append(flds)
+    return rows
 
 def main():
     host, user = "172.21.0.46", "crmpdscm"

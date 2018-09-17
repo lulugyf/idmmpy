@@ -7,9 +7,13 @@ import time
 # 产生table
 def gentable(title, header, rows, out):
     out.write("<h1> &sect; %s </h1>\n"%title)
-    out.write("<table><tr>\n")
-    for h in header: out.write(" <th>%s</th>"%h)
-    out.write("</tr>\n")
+    out.write("<table>\n")
+    if type(header) == str:
+        out.write(header)
+    else:
+        out.write("<tr>")
+        for h in header: out.write(" <th>%s</th>"%h)
+        out.write("</tr>\n")
     for r in rows:
         out.write(" <tr>")
         for f in r:
@@ -102,18 +106,29 @@ def loginpage():
 
 def getmsgpage():
     return """<html><head><meta charset=\"utf-8\"><title>input some properties</title></head><body>
-    <h1>提取消息数据:</h1>
+    <h1>提取消息内容数据:</h1>
     <form method="POST" name="getmsg" action="/getmsg" target="_blank" >
-    目标主题: <input name="topic" /> </br>
-    消费者id: <input name="client" /> </br>
-    开始时间: <input name="begin_time" value="{0}" /> <font color="red">格式: yyyy-mm-dd HH:MM:SS</font></br>
-    结束时间: <input name="end_time" /> <font color="red">留空为到当前时间, 格式同上</font> </br>
-    消息状态: <select name="msgstatus">
-    <option value="2">未消费</option><option value="1">全部</option><option value="3">已消费</option></select> </br>
-    号码正则表达式: <textarea name="patterns" cols="40" rows="5">,\"PHONE_NO\":\"([\\d]+)\",
+    <table>
+    <tr><td>目标主题: </td><td><input name="topic" size="60"/> </td></tr>
+    <tr><td>消费者id: </td><td><input name="client" size="40" /> </br></td></tr>
+    <tr><td>开始时间: </td><td><input name="begin_time" value="{0}" /> or 最近<input name="recent_min" size="6" />分钟 
+       </br> <font color="red">格式: yyyy-mm-dd HH:MM:SS</font></br></td></tr>
+    <tr><td>结束时间: </td><td><input name="end_time" /> <font color="red">留空为到当前时间, 格式同上</font> </br></td></tr>
+    <tr><td>消息状态: </td><td><select name="msgstatus">
+    <option value="2">未消费</option><option value="1">全部</option><option value="3">已消费</option></select> </br></td></tr>
+    <tr><td>号码正则表达式: </td><td><textarea name="patterns" cols="40" rows="5">,\"PHONE_NO\":\"([\\d]+)\",
 ,\"ServiceNo\":\"([\\d]+)\",</textarea>
-      <font color="red">在消息content中提取号码的正则表达式, 每行一个, 依次尝试</font> </br>
-     </br>
-    <input type="submit" value="submit" />
+      </br><font color="red">在消息content中提取号码的正则表达式, </br>
+      每行一个, 依次尝试</font> </br></td></tr>
+
+    <tr><td colspan="2"><input type="submit" value="submit" /></td></tr>
+    </table>
     </form>
     </body></html>""".format(time.strftime("%Y-%m-%d %H:%M:%S"), )
+
+def qryid_form():
+    return '''<h1>&sect; 消息查询：</h1> </br>
+        <form method="POST" name="query">
+        <label>消息ID: </label> <input type="text" name="id" size="70" /> <br />
+        <input type="submit" value="查询" />
+        </form>'''

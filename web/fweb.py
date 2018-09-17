@@ -16,41 +16,135 @@ import settings as conf
 app=Flask(__name__)
 #app.config['DEBUG'] = True
 
+def pagehandle(title):
+    def tags_decorator(func):
+        def func_wrapper():
+            r = StringIO()
+            pg.page_head(title, r)
+            func(r)
+            pg.page_tail(r)
+            return r.getvalue()
+        return func_wrapper
+    return tags_decorator
+
 @app.route('/')
-def hello_world():
-    return 'Hello World!'
+def rootpage():
+    return """
+    <h1> IDMM 运维功能列表 </h1> </br>
+    &sect; <a href="/qinfo"><b>队列积压监控  </b></a></br></br>
+    &sect; <a href="/proc"><b>主机和进程情况  </b></a></br></br>
+    &sect; <a href="/qryid"><b>查询消息id  </b></a></br></br>
+    &sect; <a href="/getmsg"><b>提取消息内容  </b></a></br></br>
+    &sect; <a href="/tbs"><b>表空间使用情况  </b></a></br></br>
+    &sect; <a href=""><b>数据库超时情况统计（to do)  </b></a></br></br>
+    &sect; <a href=""><b>消息收发探测采集（to do)  </b></a></br></br>
+    &sect; <a href="/yesterday_stastics"><b>昨日消息消费情况统计  </b></a></br></br>
+    &sect; <a href=""><b>  </b></a></br></br>
+    """
+
+@app.route('/yesterday_stastics')
+# @pagehandle("IDMM_mon")
+def yesterday_stastics():
+    return "<h1>hello</h1>"
+
+@app.route('/tbs')
+@pagehandle("IDMMDB 表空间使用情况")
+def tbs(out):
+    tbs_names = ("TBS_IDMMDB_IDX", "TBS_IDMMDB_DATA")
+    rows = rsh.read_tbs_log(conf.database_tbs_file, tbs_names, 24*15)
+    rows_16 = [r for r in rows if r[0][8:10]=='16'] # hour=16
+    # header_cols = "time,tbs,used(%),free(MB),total(MB),tbs,used(%),free(MB),used(MB)".split(",")
+    rows_show = []
+    # 把最后一条先展示出来
+    row = rows[-1]
+    r = [row[0]]
+    for n in range(len(tbs_names)):
+        tb = row[n + 1]
+        r.extend(tb)
+        r.append("")
+    rows_show.append(r)
+    rows_show.append(["&nbsp;" for i in range(len(tbs_names)*4+1)])
+
+    last_xx = [0 for i in range(len(tbs_names))]
+    for r in rows_16:   # 计算比前一条记录的差值
+        row = [r[0],]
+        for n in range(len(tbs_names)):
+            tb = r[n+1]
+            if last_xx[n] == 0:
+                last_xx[n] = tb[-1]
+                row.extend(tb)
+                row.append(0)
+            else:
+                cost = tb[-1]-last_xx[n]
+                last_xx[n] = tb[-1]
+                row.extend(tb)
+                row.append(cost)
+        rows_show.append(row)
+
+    header = """<tr><th rowspan=2>time</th>{0}</tr>
+    <tr>{1}</tr>""".format(
+        "".join(["<th colspan=4>%s</th>"%n for n in tbs_names]),
+        "<th>used(%)</th><th>free(MB)</th><th>used(MB)</th><th>used-daily(MB)</th>" * len(tbs_names)
+    )
+    pg.gentable("IDMMDB 表空间使用情况(每小时采样)",
+                header,
+                rows_show, out)
+
+@app.route('/qryid', methods=["POST", "GET"])
+def qryid():
+    import selid1
+    r = StringIO()
+    pg.page_head("IDMM 消息查询", r)
+    r.write(pg.qryid_form())
+    if request.method == 'POST':
+        id = request.form['id']
+        if id is not None:
+            id = id.strip()
+            selid1.qryid_web(id, r)
+    pg.page_tail(r)
+    return r.getvalue()
 
 @app.route("/getmsg", methods=["POST", "GET"])
 def getmsg():
     if request.method == 'POST':
         import selid1
+        from tm import time_offset
         fm = request.form
         params = {k:v for k, v in fm.items()}
+        recent = params.get("recent_min", "").strip()
+        if recent != "":
+            params['begin_time'] = time_offset(0-int(recent)*60)
         if len(params['end_time'].strip()) == 0:
             params['end_time'] = time.strftime("%Y-%m-%d %H:%M:%S")
         # def dumpTopcByTime(topic, client, tm_begin, tm_end, status, patterns, table_count):
         return "<pre>" + "\n".join(selid1.dumpTopcByTime(
             params['topic'], params['client'], params['begin_time'], params['end_time'],
-            params['status'], params['patterns'], conf.index_table_count
-        )) + "</pre>"
+            params['msgstatus'], params['patterns'], conf.index_table_count )
+        ) + "</pre>"
     else:
-        return pg.getmsgpage()
+        r = StringIO()
+        pg.page_head("IDMM 消息内容提取", r)
+        r.write( pg.getmsgpage() )
+        pg.page_tail(r)
+        return r.getvalue()
 
 @app.route("/killall", methods=["POST", "GET"])
-def killall():
+def killall(r):
+    r = StringIO()
+    pg.page_head("IDMM shutdown all", r)
     if request.method == 'POST':
         if request.form["pass"] != "123":
             return "!!! forbiden"
-        r = StringIO()
         r.write("<pre>")
         for h in conf.host_list:
             r.write("---host: %s path: %s\n"%(h['ipaddr'], h['deploypath']))
             r.write(rsh.shutdown_all(h['ipaddr'], h['user'], h['deploypath']))
             r.write("\n")
         r.write("</pre>")
-        return r.getvalue()
     else:
-        return pg.loginpage()
+        r.write(pg.loginpage() )
+    pg.page_tail(r)
+    return r.getvalue()
 
 @app.route("/startall")
 def startall():
@@ -131,9 +225,9 @@ def proc():
                 p['ble-id'] = v[0]
 
     pg.gentable("进程信息",
-                ["host", "pid", "cwd</br>ble-id", "start-time", "proc-type", "listen-ports", "jmxport", "tcp-in", "tcp-out", "datasource</br>active/idle/max"],
-                [(p['host'], p['pid'], p['cwd']+"</br>"+p.get("ble-id", ""), p['start-time'], p['proc-type'], p['listen-ports'], p['jmxport'],
-                  len(p['tcp-in']), len(p['tcp-out']),
+                ["host", "pid", "cwd</br>ble-id", "start-time", "proc-type", "listen-ports", "jmxport", "tcp in/out", "datasource</br>active/idle/max"],
+                [(p['host'], p['pid'], p['cwd']+"</br><b>"+p.get("ble-id", "")+"</b>", p['start-time'], p['proc-type'], p['listen-ports'], p['jmxport'],
+                  "%d/%d"%(len(p['tcp-in']), len(p['tcp-out']) ),
                    "</br>".join(["%s: %s/%s/%s"%(v['name'], v["active"], v["idle"], v["maxActive"])
                                  for v in p['datasource']])) for p in procinfo],
                 r)
@@ -144,13 +238,12 @@ def proc():
     return r.getvalue()
 
 
-@app.route("/qinfo")
-def qinfo():
+@app.route("/qinfo2")
+def qinfo2():
     import ble
     import operator
     import time
-    conf = json.load(open("conf.json"))
-    zkaddr = conf['zookeeper']
+    zkaddr = conf.zookeeper
     qlist = ble.listQ(zkaddr)
     succ_count, err_count, sz,sending, topic_count = 0, 0, 0,0, 0
     bleids, bleaddr, blecounts = {}, {}, {}
@@ -180,14 +273,14 @@ def qinfo():
 import m5_mon as mon
 
 
-@app.route("/qinfo1")
-def qinfo1():
+@app.route("/qinfo")
+def qinfo():
     import ble
     import operator
     import time
 
-    conf = json.load(open("conf.json"))
-    zkaddr = conf['zookeeper']
+    #conf = json.load(open("conf.json"))
+    zkaddr = conf.zookeeper
     qlist = ble.listQ(zkaddr)
     qlist = sorted(qlist, key=operator.attrgetter('size', 'err', 'total'), reverse=True)
 
@@ -199,11 +292,12 @@ def qinfo1():
     mon.get_mon(qlist)
     pg.gentable(title,
                 headers,
-                [(q.bleid, q.topic, q.client, q.total, q.size, q.err, q.sending, q.status, q.m5_prod, q.m5_cons) for q in qlist ],  #if q.topic=='TDst2'
+                [(q.bleid, q.topic, q.client, q.total, q.size, q.err, q.sending, q.status, q.m5_prod, q.m5_cons) for q in qlist if q.total>0],  #if q.topic=='TDst2'
                 r)
     pg.page_tail(r)
     return r.getvalue()
 
 if __name__=='__main__':
+    os.putenv('NLS_LANG', 'American_America.zhs16gbk')
     mon.start_mon(conf.zookeeper, conf.minutes_data_dir)
     app.run(host='0.0.0.0', port=8183, debug=True)

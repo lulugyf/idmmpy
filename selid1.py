@@ -73,6 +73,50 @@ def selid():
 
     db.close()
 
+def qryid_web(id, out):
+    db, cur = conndb()
+    print "--1", time.time()
+
+    try:
+        ii = id.split("::")
+        d_date = tmstr(ii[0])[8:10]
+        out.write("<p/> ----index:<br />")
+        out.write("<b>Cols</b>: idmm_msg_id, dst_cli_id,dst_topic_id, create_time, commit_time-create_time, consumer_resend <br />")
+        cur.execute("""select idmm_msg_id, dst_cli_id,dst_topic_id, create_time, commit_time-create_time,
+        consumer_resend from msgidx_part_%s partition (P_%s) where idmm_msg_id=:v1""" % (ii[-2], d_date), (id, ) )
+        for row in cur.fetchall():
+            out.write(", ".join([ str(f) for f in row] ) )
+            out.write("\n<br />   创建时间: %s" % tmstr(str(row[3])))
+            out.write("<br />   消费提交时间: %s" % tmstr(str(row[4]+row[3])))
+        print "--2", time.time()
+
+        out.write("<p/> ----error:<br />")
+        out.write("<b>Cols</b>: idmm_msg_id, dst_cli_id,dst_topic_id, create_time, consumer_resend <br />")
+        cur.execute("select idmm_msg_id, dst_cli_id,dst_topic_id, create_time, 0, consumer_resend from msgidx_part_err where idmm_msg_id=:id",
+                    (id, ) )
+        for row in cur.fetchall():
+            out.write(" , ".join([str(f) for f in row]))
+            out.write("<br />创建时间: %s" % tmstr(row[3]))
+        print "--3", time.time()
+
+        out.write("<p/> ----body:<br />\n")
+        id, props, content = _selcontent(cur, id, d_date)
+        if id is not None:
+            out.write("<br /> <b>ID:</b>")
+            out.write(id)
+            out.write("<br /> <b>Properties:</b>")
+            out.write(props)
+            out.write("<br /> <b>Content:</b>")
+            out.write(content)
+        print "--4", time.time()
+    except Exception,x:
+        print x
+        out.write("<pre>")
+        out.write(x)
+        out.write("</pre>")
+    cur.close()
+    db.close()
+
 import gzip
 from StringIO import StringIO
 
@@ -86,25 +130,26 @@ def gzu(s):
     return gzip.GzipFile(fileobj=StringIO(s)).read()
 
 # 取单个消息的content内容, 遇到 gz 的body, 则解压
-def _selcontent(cur, id):
+def _selcontent(cur, id, partition=""):
     ii = id.split("::")
-    sql = "select id, properties, content from messagestore_%s where id=:v" % ii[-1]
+    if partition != "":
+        partition = "partition (P_%s)"%partition
+    sql = "select id, properties, content from messagestore_%s %s where id=:v" % (ii[-1], partition)
     cur.execute(sql, (id,))
     row = cur.fetchone()
-    if row is None:
-        sql = "select id, properties, content from messagestore_bak_%s where id=:v" % ii[-1]
-        cur.execute(sql, (id,))
-        row = cur.fetchone()
+    # if row is None:
+    #     sql = "select id, properties, content from messagestore_bak_%s where id=:v" % ii[-1]
+    #     cur.execute(sql, (id,))
+    #     row = cur.fetchone()
     if row is not None:
         prop = json.loads(row[1])
         content = row[2].read()
         if prop.has_key('compress') and prop['compress'] == True:
             content = gzu(content)
         return row[0], row[1], content
-
     return None, None, None
 
-# 替
+
 def sel_orderid_err(topic, client, tag):
     db, cur = conndb()
     cur.execute('select IDMM_MSG_ID from msgidx_part_err where DST_TOPIC_ID=:v1 and DST_CLI_ID=:v2', (topic, client))
@@ -242,7 +287,6 @@ import re
 def dumpTopcByTime_sub(args):
     i, topic, client, t1, t2, status, patterns = args
     global cur
-    print 'table--', i
     patterns = [ re.compile(f.strip()) for f in patterns.split("\r\n")]
     # rr = re.compile(",\"PHONE_NO\":\"([\\d]+)\",")
     # rr1 = re.compile(',\"ServiceNo\":\"([\\d]+)\",')
@@ -250,9 +294,9 @@ def dumpTopcByTime_sub(args):
     if status=="1": msg_stat = ""  # all
     elif status == "2": msg_stat=" and commit_time=0"
     elif status == "3": msg_stat="and commit_time>0"
-    cur.execute(
-        'select idmm_msg_id, group_id, create_time, commit_time from msgidx_part_%d where DST_TOPIC_ID=:v1 and DST_CLI_ID=:v2 and create_time between :v3 and :v4 %s' %( i, msg_stat),
-        (topic, client, t1, t2))
+    sql = 'select idmm_msg_id, group_id, create_time, commit_time from msgidx_part_%d where DST_TOPIC_ID=:v1 and DST_CLI_ID=:v2 and create_time between :v3 and :v4 %s' %( i, msg_stat)
+    print sql
+    cur.execute(sql,  (topic, client, t1, t2))
     ct = 0
     ret = []
     for r in cur.fetchall():
@@ -268,6 +312,7 @@ def dumpTopcByTime_sub(args):
                     ph = r.group(1)
                     break
         ret.append("%s %s" % (id, ph))
+    print 'table--', i, ct
     return ret
 def dumpTopcByTime(topic, client, tm_begin, tm_end, status, patterns, table_count):
     n_proc = 20

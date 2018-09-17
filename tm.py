@@ -16,11 +16,16 @@ def tmstr(s):
         return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(s) / 1000))
 
 # python -c "import tm; print tm.datedelta(-14)"
-def datedelta(n):
+def datedelta(n_days):
     t = datetime.now()
-    delta = timedelta(days=n)
+    delta = timedelta(days=n_days)
     t1 = t + delta
     return t1.strftime("%Y-%m-%d")
+
+def time_offset(n_seconds):
+    t = datetime.now()
+    t = t + timedelta(seconds=n_seconds)
+    return t.strftime("%Y-%m-%d %H:%M:%S")
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
