@@ -1,7 +1,7 @@
 #coding=utf-8
 
 import os
-import json
+# import json
 from multiprocessing import Pool
 from cStringIO import StringIO
 import time
@@ -12,19 +12,21 @@ import pagegen as pg
 import rsh
 import zk
 import settings as conf
+from functools import wraps
 
 app=Flask(__name__)
 #app.config['DEBUG'] = True
 
 def pagehandle(title):
     def tags_decorator(func):
-        def func_wrapper():
+        @wraps(func)
+        def decorator():
             r = StringIO()
             pg.page_head(title, r)
             func(r)
             pg.page_tail(r)
             return r.getvalue()
-        return func_wrapper
+        return decorator
     return tags_decorator
 
 @app.route('/')
@@ -42,10 +44,15 @@ def rootpage():
     &sect; <a href=""><b>  </b></a></br></br>
     """
 
-@app.route('/yesterday_stastics')
-# @pagehandle("IDMM_mon")
-def yesterday_stastics():
-    return "<h1>hello</h1>"
+@app.route('/t1')
+@pagehandle("t1")
+def t1(r):
+    r.write("hello 1")
+@app.route('/t2')
+@pagehandle("t2")
+def t2(r):
+    r.write("hello 2")
+
 
 @app.route('/tbs')
 @pagehandle("IDMMDB 表空间使用情况")
