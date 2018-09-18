@@ -38,6 +38,7 @@ def get_jmxaddr(zkaddr, ble_only=False):
         jmxaddr = data1[0:data1.find(':')] + data1[data1.rfind(':'):]
         ble_ports.append((bleid, jmxaddr))
     if ble_only:
+        z.close()
         return ble_ports
     broker_ports = []
     base = '/idmm/broker'
@@ -51,7 +52,7 @@ def get_jmxaddr(zkaddr, ble_only=False):
 
 def listQ(zkaddr):
     q = []
-    addrs = get_jmxaddr(zkaddr, ble_only=True)
+    #addrs = get_jmxaddr(zkaddr, ble_only=True)
     # print repr(addrs)
     for bleid, jmxaddr in get_jmxaddr(zkaddr, ble_only=True):
         url = 'http://%s/jolokia/exec/com.sitech.crmpd.idmm.ble.RunTime:name=runTime/info' % jmxaddr

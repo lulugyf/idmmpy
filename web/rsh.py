@@ -6,6 +6,9 @@ import re
 import urllib2
 import json
 import sys
+import os
+
+import tm
 
 def rexec(host, user, cmd):
     try:
@@ -14,6 +17,15 @@ def rexec(host, user, cmd):
     except sb.CalledProcessError, x:
         sys.stderr.write("failed!  return code=%s" % x.returncode)
         return x.output
+
+def lexec(cmd, shell=False):
+    try:
+        output = sb.check_output(cmd, shell=shell)
+        return output, None
+    except sb.CalledProcessError, x:
+        sys.stderr.write("failed!  return code=%s" % x.returncode)
+        return None, x.output
+
 
 # 获取主机的基本信息
 def hostinfo(host, user, dfs):
@@ -199,6 +211,54 @@ def read_tbs_log(fpath, tbs_names, count=24):
     if flds is not None:
         rows.append(flds)
     return rows
+
+def scp_log_files(host_list, out_dir):
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+    sh_file = "%s/scp_get.sh" % out_dir
+    with open(sh_file, "w") as f:
+        for h in host_list:
+            dps = h['deploypath']
+            for i in range(len(dps)):
+                deploy_path = dps[i]
+                f.write( "scp -p %s@%s:%s/log/ble.debug %s/%s-%s-ble.debug\n"%(
+                    h['user'], h['ipaddr'], deploy_path, out_dir, h['ipaddr'], i+1
+                    ) )
+                f.write( "scp -p %s@%s:%s/log/broker.debug %s/%s-%s-broker.debug\n" % (
+                    h['user'], h['ipaddr'], deploy_path, out_dir, h['ipaddr'], i + 1
+                    ) )
+
+    sout, serr = lexec(["sh", sh_file])
+    if serr is not None:
+        sys.stderr.write("failed!  return code=%s  %s" % (x.returncode, x.output) )
+        return None
+    print sout
+
+    today_str = tm.datedelta(0)[8:10]
+    #print "today_str", today_str
+    for f in os.listdir(out_dir): # 先检查文件修改时间， 如果非当天的， 则删除
+        if f.find(".debug") < 0: continue
+        fpath = "%s/%s"%(out_dir, f)
+        st = os.stat(fpath)
+        fdate = tm.tmstr(str(int(st.st_mtime)*1000))
+        print 'fdate', fdate, fpath
+        fdate = fdate[8:10]
+        if today_str != fdate:
+            print "debug modified not today", fpath, today_str, fdate
+            os.remove(fpath)
+            continue
+    # 分时段统计
+    sh = "cd %s && grep cost *broker*|awk '{if($(NF-1)>499) print substr($2,6,5)}' >min && grep timeout *ble*|awk '{print substr($2,6,5)}' >>min && cat min|sort|uniq -c" % (
+        out_dir )
+    sout, serr = lexec([sh,], shell=True)
+    print '[sout]', sout
+    print '[serr]', serr
+    if serr is not None:
+        return serr
+    else:
+        return sout
+
+
 
 def main():
     host, user = "172.21.0.46", "crmpdscm"

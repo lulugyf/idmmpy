@@ -35,6 +35,8 @@ zookeeper__fq = "10.113.161.103:8671,10.113.161.104:8671,10.113.161.105:8671,10.
 zookeeper__si = "172.21.0.46:3181"
 index_table_count = 200
 minutes_data_dir = "minutes"
+statics_data_dir = "statics"
+log_timeout_dir = "timeoutlog"
 
 database_tbs_file = "/idmm/idmm3/log/tbs.log"
 

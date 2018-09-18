@@ -132,3 +132,9 @@ def qryid_form():
         <label>消息ID: </label> <input type="text" name="id" size="70" /> <br />
         <input type="submit" value="查询" />
         </form>'''
+
+def stactics_form(days=5):
+    return """<form method="GET" name="query" action="">
+        <label>查询 </label> <select name="ndays" /> %s </select><label> 天前 </label>
+        <input type="submit" value="查询" /> 同一日期的第一次查询较慢，之后的查询使用保存文件的数据
+        </form>""" % "".join(['<option value="-{0}">-{0}</option>'.format(i+1) for i in range(days)])

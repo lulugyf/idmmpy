@@ -342,6 +342,7 @@ def stastics(n, topics=None):
     pool = Pool(processes=n_proc, initializer=_proc_init)
     args = [(i, part) for i in range(index_count)]
     ret = pool.map(stastics_subproc, args)
+    pool.close()
     result = {}
     for rows in ret:
         for r in rows:

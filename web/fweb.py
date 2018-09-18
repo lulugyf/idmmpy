@@ -5,6 +5,8 @@ import os
 from multiprocessing import Pool
 from cStringIO import StringIO
 import time
+from functools import wraps
+import cPickle as pickle
 
 from flask import Flask, request
 
@@ -12,7 +14,8 @@ import pagegen as pg
 import rsh
 import zk
 import settings as conf
-from functools import wraps
+from db import stastics, getTopicsConf
+import tm
 
 app=Flask(__name__)
 #app.config['DEBUG'] = True
@@ -35,24 +38,60 @@ def rootpage():
     <h1> IDMM 运维功能列表 </h1> </br>
     &sect; <a href="/qinfo"><b>队列积压监控  </b></a></br></br>
     &sect; <a href="/proc"><b>主机和进程情况  </b></a></br></br>
-    &sect; <a href="/qryid"><b>查询消息id  </b></a></br></br>
+    &sect; <a href="/qryid"><b>查询消息id (分区表模式)  </b></a></br></br>
     &sect; <a href="/getmsg"><b>提取消息内容  </b></a></br></br>
     &sect; <a href="/tbs"><b>表空间使用情况  </b></a></br></br>
-    &sect; <a href=""><b>数据库超时情况统计（to do)  </b></a></br></br>
+    &sect; <a href="/log_timeouts"><b>数据库超时情况统计（to do)  </b></a></br></br>
     &sect; <a href=""><b>消息收发探测采集（to do)  </b></a></br></br>
-    &sect; <a href="/yesterday_stastics"><b>昨日消息消费情况统计  </b></a></br></br>
+    &sect; <a href="/yesterday_stastics"><b>昨日消息消费情况统计(分区表模式)  </b></a></br></br>
     &sect; <a href=""><b>  </b></a></br></br>
     """
 
-@app.route('/t1')
-@pagehandle("t1")
-def t1(r):
-    r.write("hello 1")
-@app.route('/t2')
-@pagehandle("t2")
-def t2(r):
-    r.write("hello 2")
+@app.route('/log_timeouts')
+@pagehandle("数据库超时告警日志统计")
+def log_timeouts(out):
+    outstr = rsh.scp_log_files(conf.host_list, conf.log_timeout_dir)
+    out.write("<pre>")
+    out.write(outstr)
+    out.write("</pre>")
+    out.write("done!")
 
+
+@app.route('/yesterday_stastics')
+@pagehandle("IDMM日统计-昨日消息消费情况统计")
+def yesterday_stastics(out):
+    out.write(pg.stactics_form(7))
+    ndays = request.args.get('ndays', "-1")
+    print "----", ndays
+    days_n = int(ndays)
+    st_date = tm.datedelta(days_n)
+    fname = "%s/%s"%(conf.statics_data_dir, st_date)
+    if not os.path.exists(fname):
+        zcli = zk.ZKCli(conf.zookeeper)
+        zcli.start()
+        ver_node = zcli.get('/idmm/configServer/version')
+        zcli.close()
+        ver = str(ver_node[0])
+        #print "conf version", ver, repr(ver_node)
+        topics = getTopicsConf(ver)
+
+        # 调用统计sql
+        title, st_date, header, rows = stastics(days_n, topics)
+        with open(fname, "wb") as f:
+            pickle.dump({"title":title, "st_date":st_date, "header":header, "rows":rows}, f)
+    else:
+        with open(fname, "rb") as f:
+            dd = pickle.load(f)
+            title, st_date, header, rows = dd["title"], dd['st_date'], dd['header'], dd['rows']
+
+    # 统计按bleid的消息总量
+    blecounts = {}
+    for r in rows:
+        bleid, count = r[-2], r[1]
+        blecounts[bleid] = blecounts.get(bleid, 0) + count
+
+    pg.gentable(title, header, rows, out)
+    pg.gentable("按bleid的消息量统计", ["bleid", "count"], [(k, v) for k, v in blecounts.items()], out)
 
 @app.route('/tbs')
 @pagehandle("IDMMDB 表空间使用情况")
@@ -306,5 +345,7 @@ def qinfo():
 
 if __name__=='__main__':
     os.putenv('NLS_LANG', 'American_America.zhs16gbk')
+    if not os.path.exists(conf.statics_data_dir):
+        os.makedirs(conf.statics_data_dir)
     mon.start_mon(conf.zookeeper, conf.minutes_data_dir)
     app.run(host='0.0.0.0', port=8183, debug=True)
