@@ -1,6 +1,8 @@
 #coding=utf-8
 
 import os
+import sys
+sys.path.append('..')
 # import json
 from multiprocessing import Pool
 from cStringIO import StringIO
@@ -14,18 +16,21 @@ import pagegen as pg
 import rsh
 import zk
 import settings as conf
-from db import stastics, getTopicsConf
+from db import stastics, getTopicsConf, table_part_list
 import tm
 
-app=Flask(__name__)
+app=Flask(__name__, static_url_path='/static')
 #app.config['DEBUG'] = True
 
-def pagehandle(title):
+def pagehandle(title, css=None):
     def tags_decorator(func):
         @wraps(func)
         def decorator():
             r = StringIO()
-            pg.page_head(title, r)
+            if css is None:
+                pg.page_head(title, r)
+            else:
+                pg.page_head_css(title, r, css)
             func(r)
             pg.page_tail(r)
             return r.getvalue()
@@ -41,20 +46,70 @@ def rootpage():
     &sect; <a href="/qryid"><b>查询消息id (分区表模式)  </b></a></br></br>
     &sect; <a href="/getmsg"><b>提取消息内容  </b></a></br></br>
     &sect; <a href="/tbs"><b>表空间使用情况  </b></a></br></br>
-    &sect; <a href="/log_timeouts"><b>数据库超时情况统计（to do)  </b></a></br></br>
-    &sect; <a href=""><b>消息收发探测采集（to do)  </b></a></br></br>
+    &sect; <a href="/log_timeouts"><b>数据库超时情况统计 </b></a></br></br>
     &sect; <a href="/yesterday_stastics"><b>昨日消息消费情况统计(分区表模式)  </b></a></br></br>
+    &sect; <a href="/part_list"><b>表分区数据量估计(分区表模式)  </b></a></br></br>
+    &sect; <a href="/msg_test"><b>消息收发探测采集  </b></a></br></br>
     &sect; <a href=""><b>  </b></a></br></br>
     """
 
+@app.route('/msg_test')
+@pagehandle("消息收发探测采集")
+def msg_test(out):
+    header, rows = rsh.read_msg_test_log(conf.msg_test_log_file, 144)
+    pg.gentable("消息收发探测采集记录", header, rows, out)
+
+@app.route('/part_list')
+@pagehandle("表分区数据量估计(分区表模式)")
+def part_list(out):
+    header, rows = table_part_list()
+    pg.gentable("表分区记录数估计", header, rows, out)
+
 @app.route('/log_timeouts')
-@pagehandle("数据库超时告警日志统计")
+@pagehandle("数据库超时告警日志统计", css='<link href="/static/c3.min.css" rel="stylesheet">')
 def log_timeouts(out):
     outstr = rsh.scp_log_files(conf.host_list, conf.log_timeout_dir)
-    out.write("<pre>")
-    out.write(outstr)
-    out.write("</pre>")
-    out.write("done!")
+    xa =[]
+    ya =[]
+    for l in outstr.split('\n'):
+        l = l.strip().split()
+        if len(l) != 2: continue
+        ya.append(l[0])
+        xa.append("'%s'" % l[1])
+
+    x = ",".join(xa)
+    y = ",".join(ya)
+    out.write("""
+    <script src="/static/c3.min.js"></script>
+    <script src="/static/d3-5.4.0.min.js"></script>
+<div id="chart"></div>
+<script>
+var chart = c3.generate({
+    bindto: '#chart',
+    data: {
+        columns: [
+            ['data1', %s]
+        ],
+        types: {
+          data1: 'bar'
+        }
+    },
+    axis: {
+        y: {
+         label: {
+          text: 'SQL 超过 500ms 告警次数',
+          position: 'outer-middle'
+         }
+        },
+        x: {
+            label: { text: '时间（当日）', position: 'outer-middle' },
+            type: 'category',
+            categories: [ %s ]
+        }
+    }
+});
+</script>
+    """ % (y, x) )
 
 
 @app.route('/yesterday_stastics')
@@ -130,7 +185,7 @@ def tbs(out):
     header = """<tr><th rowspan=2>time</th>{0}</tr>
     <tr>{1}</tr>""".format(
         "".join(["<th colspan=4>%s</th>"%n for n in tbs_names]),
-        "<th>used(%)</th><th>free(MB)</th><th>used(MB)</th><th>used-daily(MB)</th>" * len(tbs_names)
+        "<th>used(%)</th><th>free(GB)</th><th>used(GB)</th><th>used-daily(GB)</th>" * len(tbs_names)
     )
     pg.gentable("IDMMDB 表空间使用情况(每小时采样)",
                 header,

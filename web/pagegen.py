@@ -8,6 +8,7 @@ import time
 def gentable(title, header, rows, out):
     out.write("<h1> &sect; %s </h1>\n"%title)
     out.write("<table>\n")
+    # print type(header)==str, repr(header)
     if type(header) == str:
         out.write(header)
     else:
@@ -21,7 +22,7 @@ def gentable(title, header, rows, out):
         out.write(" </tr>\n")
     out.write("</table>")
 
-def page_head(title, out):
+def page_head_css(title, out, css=None):
     out.write("<html><header><meta charset=\"utf-8\"><title>%s</title>"%title)
     out.write("""    <style>
         table
@@ -55,8 +56,13 @@ def page_head(title, out):
             align-content: center;
         }
     </style>""")
+    if css is not None:
+        out.write(css)
     out.write("</head><body>\n")
     out.write('<a href="/">返回首页</a></br>\n')
+
+def page_head(title, out):
+    page_head_css(title, out, None)
 
 def page_tail(out):
     out.write("\n</body></html>")

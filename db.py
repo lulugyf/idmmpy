@@ -112,7 +112,7 @@ def sel_un_msg():
 def tablespace_mon():
     print time.strftime("%Y%m%d%H%M%S")
     sql = '''SELECT NVL(b.tablespace_name,nvl(a.tablespace_name,'UNKOWN')) name,
-     ((Mbytes_alloc-NVL(Mbytes_free,0))/Mbytes_alloc)*100   pct_used, Mbytes_free, Mbytes_alloc as Total
+     ((Mbytes_alloc-NVL(Mbytes_free,0))/Mbytes_alloc)*100   pct_used, ROUND(Mbytes_free/1024,1) as free, ROUND(Mbytes_alloc/1024,1) as Total
      FROM   ( SELECT   SUM(bytes)/1024/1024 as Mbytes_free
                      , MAX(bytes)/1024 largest
                      , tablespace_name
@@ -131,7 +131,7 @@ def tablespace_mon():
         tname = r[0]
         if tname.find("IDMMDB") < 0:
             continue
-        print "{0}\t{1:.3f}%\t{2:.0f}MB\t{3:.0f}MB".format(*r)
+        print "{0}\t{1:.3f}%\t{2:.0f}GB\t{3:.0f}GB".format(*r)
     cur.close(); db.close()
 
 
@@ -290,18 +290,24 @@ def table_store_list():
 # 查看表的各分区记录数
 # python -c "import db; db.table_part_list()"
 def table_part_list():
+    headers = "表名 分区名 记录数 记录最小时间 记录最大时间".split()
+    rows = []
     db, cur = conndb()
     for tbl, col in (("MESSAGESTORE_0", "createtime"), ("MSGIDX_PART_0", "create_time") ):
         print "====", tbl
+        rows.append([tbl, "", "", "", ""])
         for i in range(1,32):
             sql = "select count(*), min(%s), max(%s) from %s partition(P_%02d)"%(col, col, tbl, i)
             cur.execute(sql )
             r = cur.fetchone()
             if r[0] > 0:
                 print "    P_%02d"%i, r[0], tmstr(str(r[1])), tmstr(str(r[2]))
+                rows.append(["", "P_%02d"%i, r[0], tmstr(str(r[1])), tmstr(str(r[2]))])
             else:
                 print "    P_%02d"%i, 0
+                rows.append(["", "P_%02d"%i, 0, "", ""])
     db.close()
+    return headers, rows
 
 # python -c "import db; db.msgcountDate('2018-09-03 00:00:00', '2018-09-04 00:00:00')" |sort >9.3
 # python -c "import db; db.msgcountDate('2018-09-02 00:00:00', '2018-09-03 00:00:00')" |sort >9.2

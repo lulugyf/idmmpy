@@ -46,8 +46,9 @@ class DMMClient:
         j = self.post(self.send_commit_url, data)
         if j['result-code'] != 'OK':
             print 'send failed', j['result-code']
-            return
-        print 'send commit return', j['result-code']
+            return False
+        return True
+        #print 'send commit return', j['result-code']
     
     def fetch(self, topic, client, process_time=10):
         data = {'target-topic':topic,
@@ -56,13 +57,14 @@ class DMMClient:
         j = self.post(self.fetch_url, data)
         #print '====', repr(j)
         if j['result-code'] != 'OK':
-            print 'fetch failed', j['result-code']
             if j['result-code'] == 'NO_MORE_MESSAGE':
                 return 0, ''
+            else:
+                print 'fetch failed', j['result-code']
             return None, 'failed'
         msgid = j['message-id']
         content = j['content']
-        print j
+        #print j
         return msgid, content
 
     def fetch_props(self, topic, client, process_time=60):

@@ -27,6 +27,20 @@ def time_offset(n_seconds):
     t = t + timedelta(seconds=n_seconds)
     return t.strftime("%Y-%m-%d %H:%M:%S")
 
+def __tbs_log():
+    with open("tbs.log1", "w") as f:
+        with open("tbs.log") as f1:
+            for line in f1:
+                if line.startswith("2"):
+                    f.write(line)
+                else:
+                    l = line.strip().split('\t')
+                    if l[3].endswith("MB"):
+                        l[3] = l[3][:-5]+"GB"
+                    if l[2].endswith("MB"):
+                        l[2] = l[2][:-5]+"GB"
+                    f.write("%s\n"%"\t".join(l))
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print "give me a time, time format: %Y-%m-%d %H:%M:%S"

@@ -40,3 +40,5 @@ log_timeout_dir = "timeoutlog"
 
 database_tbs_file = "/idmm/idmm3/log/tbs.log"
 
+msg_test_log_file = "/idmm/idmm3/log/msg_test.log"
+

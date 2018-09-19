@@ -191,7 +191,7 @@ def read_tbs_log(fpath, tbs_names, count=24):
         lines = tail(f, count*3)
     rows = []
     flds = None
-    rr = re.compile(r"[^\t]+\t([\d\.]+)\%\t(\d+)MB\t(\d+)MB")  # print "{0}\t{1:.3f}%\t{2:.0f}MB\t{3:.0f}MB".format(*r)
+    rr = re.compile(r"[^\t]+\t([\d\.]+)\%\t(\d+)GB\t(\d+)GB")  # print "{0}\t{1:.3f}%\t{2:.0f}MB\t{3:.0f}MB".format(*r)
     for line in lines:
         if line.startswith("2"):
             if flds is not None:
@@ -211,6 +211,21 @@ def read_tbs_log(fpath, tbs_names, count=24):
     if flds is not None:
         rows.append(flds)
     return rows
+
+def read_msg_test_log(fpath, count=144):
+    with open(fpath) as f:
+        lines = tail(f, count)
+    header = "探测时间 发送消息数 平均响应时间 接收消息数 平均响应时间".split()
+    rows = []
+    for line in lines:
+        if not line.startswith("== "):
+            continue
+        r = line.split("\t")
+        if len(r) < 5:
+            rows.append([r[0][3:], r[1], 0, 0, 0])
+        else:
+            rows.append([r[0][3:], r[1], r[2], r[3], r[4]])
+    return header, rows
 
 def scp_log_files(host_list, out_dir):
     if not os.path.exists(out_dir):
