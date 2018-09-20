@@ -120,6 +120,8 @@ def yesterday_stastics(out):
     print "----", ndays
     days_n = int(ndays)
     st_date = tm.datedelta(days_n)
+    if not os.path.exists(conf.statics_data_dir):
+        os.makedirs(conf.statics_data_dir)
     fname = "%s/%s"%(conf.statics_data_dir, st_date)
     if not os.path.exists(fname):
         zcli = zk.ZKCli(conf.zookeeper)
@@ -400,7 +402,5 @@ def qinfo():
 
 if __name__=='__main__':
     os.putenv('NLS_LANG', 'American_America.zhs16gbk')
-    if not os.path.exists(conf.statics_data_dir):
-        os.makedirs(conf.statics_data_dir)
     mon.start_mon(conf.zookeeper, conf.minutes_data_dir)
     app.run(host='0.0.0.0', port=8183, debug=True)
