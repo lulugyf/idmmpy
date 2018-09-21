@@ -1,3 +1,4 @@
+#encoding=utf-8
 
 host_list__si = [
  {"ipaddr":"172.21.0.46", "user":"crmpdscm", "diskpath":["/crmpdscm", "/crmpdscmweb"], "deploypath":["/crmpdscm/idmm3/broker0"], "lsof":"/usr/sbin/lsof"},
@@ -29,6 +30,9 @@ host_list__fq = [
  {"ipaddr": "10.113.181.91", "user": "idmm", "diskpath": ["/idmm"],
   "deploypath": ["/idmm/idmm3/idmm-broker%d" % i for i in (1, 2, 3)], "lsof": "/usr/sbin/lsof"},
 ]
+
+title_suffix = "--西区"
+title_suffix_fq = "--府青"
 
 zookeeper = "10.113.172.56:8671,10.113.172.57:8671,10.113.172.58:8671,10.112.185.2:8671,10.112.185.3:8671"
 zookeeper__fq = "10.113.161.103:8671,10.113.161.104:8671,10.113.161.105:8671,10.105.92.50:8671,10.105.92.51:8671"

@@ -3,6 +3,7 @@
 # 产生html page的页面
 
 import time
+import settings as conf
 
 # 产生table
 def gentable(title, header, rows, out):
@@ -23,7 +24,7 @@ def gentable(title, header, rows, out):
     out.write("</table>")
 
 def page_head_css(title, out, css=None):
-    out.write("<html><header><meta charset=\"utf-8\"><title>%s</title>"%title)
+    out.write("<html><header><meta charset=\"utf-8\"><title>%s %s</title>"%(title, conf.title_suffix) )
     out.write("""    <style>
         table
         {
@@ -59,7 +60,7 @@ def page_head_css(title, out, css=None):
     if css is not None:
         out.write(css)
     out.write("</head><body>\n")
-    out.write('<a href="/">返回首页</a></br>\n')
+    out.write('<a href="/">返回首页</a><br/>\n')
 
 def page_head(title, out):
     page_head_css(title, out, None)
@@ -105,7 +106,7 @@ def mon_page(fname):
 def loginpage():
     return """<html><head><meta charset=\"utf-8\"><title>kill proc confirm</title></head><body>
     <form method="POST" name="auth" action="/killall" >
-    pass code: <input type="password" name="pass" /> </br>
+    pass code: <input type="password" name="pass" /> <br/>
     <input type="submit" value="submit" />
     </form>
     </body></html>"""
@@ -116,16 +117,16 @@ def getmsgpage():
     <form method="POST" name="getmsg" action="/getmsg" target="_blank" >
     <table>
     <tr><td>目标主题: </td><td><input name="topic" size="60"/> </td></tr>
-    <tr><td>消费者id: </td><td><input name="client" size="40" /> </br></td></tr>
+    <tr><td>消费者id: </td><td><input name="client" size="40" /> <br/></td></tr>
     <tr><td>开始时间: </td><td><input name="begin_time" value="{0}" /> or 最近<input name="recent_min" size="6" />分钟 
-       </br> <font color="red">格式: yyyy-mm-dd HH:MM:SS</font></br></td></tr>
-    <tr><td>结束时间: </td><td><input name="end_time" /> <font color="red">留空为到当前时间, 格式同上</font> </br></td></tr>
+       <br/> <font color="red">格式: yyyy-mm-dd HH:MM:SS</font><br/></td></tr>
+    <tr><td>结束时间: </td><td><input name="end_time" /> <font color="red">留空为到当前时间, 格式同上</font> <br/></td></tr>
     <tr><td>消息状态: </td><td><select name="msgstatus">
-    <option value="2">未消费</option><option value="1">全部</option><option value="3">已消费</option></select> </br></td></tr>
+    <option value="2">未消费</option><option value="1">全部</option><option value="3">已消费</option></select> <br/></td></tr>
     <tr><td>号码正则表达式: </td><td><textarea name="patterns" cols="40" rows="5">,\"PHONE_NO\":\"([\\d]+)\",
 ,\"ServiceNo\":\"([\\d]+)\",</textarea>
-      </br><font color="red">在消息content中提取号码的正则表达式, </br>
-      每行一个, 依次尝试</font> </br></td></tr>
+      <br/><font color="red">在消息content中提取号码的正则表达式, <br/>
+      每行一个, 依次尝试</font> <br/></td></tr>
 
     <tr><td colspan="2"><input type="submit" value="submit" /></td></tr>
     </table>
@@ -133,7 +134,7 @@ def getmsgpage():
     </body></html>""".format(time.strftime("%Y-%m-%d %H:%M:%S"), )
 
 def qryid_form():
-    return '''<h1>&sect; 消息查询：</h1> </br>
+    return '''<h1>&sect; 消息查询：</h1> <br/>
         <form method="POST" name="query">
         <label>消息ID: </label> <input type="text" name="id" size="70" /> <br />
         <input type="submit" value="查询" />

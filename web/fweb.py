@@ -19,7 +19,6 @@ import settings as conf
 from db import stastics, getTopicsConf, table_part_list
 import tm
 
-app=Flask(__name__, static_url_path='/static')
 #app.config['DEBUG'] = True
 
 def pagehandle(title, css=None):
@@ -37,20 +36,22 @@ def pagehandle(title, css=None):
         return decorator
     return tags_decorator
 
+app=Flask(__name__, static_url_path='/static')
+
 @app.route('/')
 def rootpage():
     return """
-    <h1> IDMM 运维功能列表 </h1> </br>
-    &sect; <a href="/qinfo"><b>队列积压监控  </b></a></br></br>
-    &sect; <a href="/proc"><b>主机和进程情况  </b></a></br></br>
-    &sect; <a href="/qryid"><b>查询消息id (分区表模式)  </b></a></br></br>
-    &sect; <a href="/getmsg"><b>提取消息内容  </b></a></br></br>
-    &sect; <a href="/tbs"><b>表空间使用情况  </b></a></br></br>
-    &sect; <a href="/log_timeouts"><b>数据库超时情况统计 </b></a></br></br>
-    &sect; <a href="/yesterday_stastics"><b>昨日消息消费情况统计(分区表模式)  </b></a></br></br>
-    &sect; <a href="/part_list"><b>表分区数据量估计(分区表模式)  </b></a></br></br>
-    &sect; <a href="/msg_test"><b>消息收发探测采集  </b></a></br></br>
-    &sect; <a href=""><b>  </b></a></br></br>
+    <h1> IDMM 运维功能列表 </h1> <br/>
+    &sect; <a href="/qinfo"><b>队列积压监控  </b></a><br/><br/>
+    &sect; <a href="/proc"><b>主机和进程情况  </b></a><br/><br/>
+    &sect; <a href="/qryid"><b>查询消息id (分区表模式)  </b></a><br/><br/>
+    &sect; <a href="/getmsg"><b>提取消息内容  </b></a><br/><br/>
+    &sect; <a href="/tbs"><b>表空间使用情况  </b></a><br/><br/>
+    &sect; <a href="/log_timeouts"><b>数据库超时情况统计 </b></a><br/><br/>
+    &sect; <a href="/yesterday_stastics"><b>昨日消息消费情况统计(分区表模式)  </b></a><br/><br/>
+    &sect; <a href="/part_list"><b>表分区数据量估计(分区表模式)  </b></a><br/><br/>
+    &sect; <a href="/msg_test"><b>消息收发探测采集  </b></a><br/><br/>
+    &sect; <a href=""><b>  <br/></a><br/><br/>
     """
 
 @app.route('/msg_test')
@@ -71,12 +72,16 @@ def log_timeouts(out):
     outstr = rsh.scp_log_files(conf.host_list, conf.log_timeout_dir)
     xa =[]
     ya =[]
+    rows = []
     for l in outstr.split('\n'):
         l = l.strip().split()
         if len(l) != 2: continue
         ya.append(l[0])
         xa.append("'%s'" % l[1])
+        rows.append(l)
 
+
+    out.write("<br /> 表格绘制< br />")
     x = ",".join(xa)
     y = ",".join(ya)
     out.write("""
@@ -110,6 +115,8 @@ var chart = c3.generate({
 });
 </script>
     """ % (y, x) )
+    pg.gentable("按分钟统计的超时数量", "次数 时间".split(), rows, out)
+
 
 
 @app.route('/yesterday_stastics')
@@ -120,8 +127,6 @@ def yesterday_stastics(out):
     print "----", ndays
     days_n = int(ndays)
     st_date = tm.datedelta(days_n)
-    if not os.path.exists(conf.statics_data_dir):
-        os.makedirs(conf.statics_data_dir)
     fname = "%s/%s"%(conf.statics_data_dir, st_date)
     if not os.path.exists(fname):
         zcli = zk.ZKCli(conf.zookeeper)
@@ -286,9 +291,9 @@ def proc():
         hinfos = [_proc2(args[0]),]
 
     pg.gentable("主机信息",
-                ["hostname", "ipaddr", "cpu-idle", "disks</br>(path free used)", "mem-free-kb", "mem-used", "swap-free-kb", "swap-used"],
+                ["hostname", "ipaddr", "cpu-idle", "disks<br/>(path free used)", "mem-free-kb", "mem-used", "swap-free-kb", "swap-used"],
                 [(h['hostname'], h['host'], h['cpu-idle'] + " %",
-                  "<br>".join(["%s %s %s %%" % (d['path'], d['available'], d['percent']) for d in h["disks"]]),
+                  "<br />".join(["%s %s %s %%" % (d['path'], d['available'], d['percent']) for d in h["disks"]]),
                   h['mem-free-kb'], "%.2f %%" % ((h['mem-total-kb'] - h['mem-free-kb']) * 100.0 / h['mem-total-kb']),
                   h['swap-free-kb'],
                   "%.2f %%" % ((h['swap-total-kb'] - h['swap-free-kb']) * 100.0 / h['swap-total-kb'])) for h in hinfos],
@@ -328,15 +333,15 @@ def proc():
                 p['ble-id'] = v[0]
 
     pg.gentable("进程信息",
-                ["host", "pid", "cwd</br>ble-id", "start-time", "proc-type", "listen-ports", "jmxport", "tcp in/out", "datasource</br>active/idle/max"],
-                [(p['host'], p['pid'], p['cwd']+"</br><b>"+p.get("ble-id", "")+"</b>", p['start-time'], p['proc-type'], p['listen-ports'], p['jmxport'],
+                ["host", "pid", "cwd<br/>ble-id", "start-time", "proc-type", "listen-ports", "jmxport", "tcp in/out", "datasource<br/>active/idle/max"],
+                [(p['host'], p['pid'], p['cwd']+"<br/><b>"+p.get("ble-id", "")+"</b>", p['start-time'], p['proc-type'], p['listen-ports'], p['jmxport'],
                   "%d/%d"%(len(p['tcp-in']), len(p['tcp-out']) ),
-                   "</br>".join(["%s: %s/%s/%s"%(v['name'], v["active"], v["idle"], v["maxActive"])
+                   "<br/>".join(["%s: %s/%s/%s"%(v['name'], v["active"], v["idle"], v["maxActive"])
                                  for v in p['datasource']])) for p in procinfo],
                 r)
 
-    r.write("</br><div><a href='/killall' target='_blank'>shutdown all processes</a></div>")
-    r.write("</br><div><a href='/startall' target='_blank'>startup all processes</a></div>")
+    r.write("<br/><div><a href='/killall' target='_blank'>shutdown all processes</a></div>")
+    r.write("<br/><div><a href='/startall' target='_blank'>startup all processes</a></div>")
     pg.page_tail(r)
     return r.getvalue()
 
@@ -402,5 +407,7 @@ def qinfo():
 
 if __name__=='__main__':
     os.putenv('NLS_LANG', 'American_America.zhs16gbk')
+    if not os.path.exists(conf.statics_data_dir):
+        os.makedirs(conf.statics_data_dir)
     mon.start_mon(conf.zookeeper, conf.minutes_data_dir)
-    app.run(host='0.0.0.0', port=8183, debug=True)
+    app.run(host='0.0.0.0', port=8183, debug=False)
