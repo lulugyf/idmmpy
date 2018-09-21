@@ -16,7 +16,7 @@ import pagegen as pg
 import rsh
 import zk
 import settings as conf
-from db import stastics, getTopicsConf, table_part_list
+import db
 import tm
 
 #app.config['DEBUG'] = True
@@ -51,8 +51,29 @@ def rootpage():
     &sect; <a href="/yesterday_stastics"><b>昨日消息消费情况统计(分区表模式)  </b></a><br/><br/>
     &sect; <a href="/part_list"><b>表分区数据量估计(分区表模式)  </b></a><br/><br/>
     &sect; <a href="/msg_test"><b>消息收发探测采集  </b></a><br/><br/>
+    &sect; <a href="/check_unconsumed"><b>未消费消息检查 </b></a><br/><br/>
+    &sect; <a href="/all_topics"><b>主题配置信息 </b></a><br/><br/>
+    &sect; <a href="/all_topics_file"><b>主题配置信息(文件) </b></a><br/><br/>
     &sect; <a href=""><b>  <br/></a><br/><br/>
     """
+
+@app.route('/all_topics_file')
+@pagehandle("主题配置信息")
+def pg_all_topics_file(out):
+    header, rows = db.topic_file()
+    pg.gentable("主题配置信息 (文件)", header, rows, out)
+
+@app.route('/all_topics')
+@pagehandle("主题配置信息")
+def pg_all_topics(out):
+    ver, header, rows = db.dumpAllTopicConf(__get_conf_ver, conf.conf_cache_dir)
+    pg.gentable("主题配置信息 (当前配置版本%s)"%ver, header, rows, out)
+
+@app.route('/check_unconsumed')
+@pagehandle("未消费消息检查")
+def pg_check_unconsumed(out):
+    header, rows = db.check_unconsumed()
+    pg.gentable("未消费消息情况", header, rows, out)
 
 @app.route('/msg_test')
 @pagehandle("消息收发探测采集")
@@ -63,7 +84,7 @@ def msg_test(out):
 @app.route('/part_list')
 @pagehandle("表分区数据量估计(分区表模式)")
 def part_list(out):
-    header, rows = table_part_list()
+    header, rows = db.table_part_list()
     pg.gentable("表分区记录数估计", header, rows, out)
 
 @app.route('/log_timeouts')
@@ -117,11 +138,19 @@ var chart = c3.generate({
     """ % (y, x) )
     pg.gentable("按分钟统计的超时数量", "次数 时间".split(), rows, out)
 
-
+def __get_conf_ver():
+    zcli = zk.ZKCli(conf.zookeeper)
+    zcli.start()
+    ver_node = zcli.get('/idmm/configServer/version')
+    zcli.close()
+    ver = str(ver_node[0])
+    return ver
 
 @app.route('/yesterday_stastics')
 @pagehandle("IDMM日统计-昨日消息消费情况统计")
 def yesterday_stastics(out):
+    if not os.path.exists(conf.statics_data_dir):
+        os.makedirs(conf.statics_data_dir)
     out.write(pg.stactics_form(7))
     ndays = request.args.get('ndays', "-1")
     print "----", ndays
@@ -129,16 +158,12 @@ def yesterday_stastics(out):
     st_date = tm.datedelta(days_n)
     fname = "%s/%s"%(conf.statics_data_dir, st_date)
     if not os.path.exists(fname):
-        zcli = zk.ZKCli(conf.zookeeper)
-        zcli.start()
-        ver_node = zcli.get('/idmm/configServer/version')
-        zcli.close()
-        ver = str(ver_node[0])
+        ver = __get_conf_ver()
         #print "conf version", ver, repr(ver_node)
-        topics = getTopicsConf(ver)
+        topics = db.getTopicsConf(ver)
 
         # 调用统计sql
-        title, st_date, header, rows = stastics(days_n, topics)
+        title, st_date, header, rows = db.stastics(days_n, topics)
         with open(fname, "wb") as f:
             pickle.dump({"title":title, "st_date":st_date, "header":header, "rows":rows}, f)
     else:
@@ -387,7 +412,6 @@ def qinfo():
     import operator
     import time
 
-    #conf = json.load(open("conf.json"))
     zkaddr = conf.zookeeper
     qlist = ble.listQ(zkaddr)
     qlist = sorted(qlist, key=operator.attrgetter('size', 'err', 'total'), reverse=True)
@@ -397,7 +421,7 @@ def qinfo():
     pg.page_head(title, r)
 
     headers = "BLE-ID 消息主题 消费者ID 总量 积压 失败 在途 status 5m生产 5m消费".split()
-    mon.get_mon(qlist)
+    mon.get_mon(qlist, conf.minutes_data_dir)
     pg.gentable(title,
                 headers,
                 [(q.bleid, q.topic, q.client, q.total, q.size, q.err, q.sending, q.status, q.m5_prod, q.m5_cons) for q in qlist if q.total>0],  #if q.topic=='TDst2'
@@ -405,9 +429,18 @@ def qinfo():
     pg.page_tail(r)
     return r.getvalue()
 
+import argparse
+
 if __name__=='__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", default=8183, type=int, help="Port to listen on")
+    parser.add_argument("--debug", default=False, type=bool, help="If running with debug mode")
+    args = parser.parse_args()
+
     os.putenv('NLS_LANG', 'American_America.zhs16gbk')
-    if not os.path.exists(conf.statics_data_dir):
-        os.makedirs(conf.statics_data_dir)
-    mon.start_mon(conf.zookeeper, conf.minutes_data_dir)
-    app.run(host='0.0.0.0', port=8183, debug=False)
+    #print repr(args.debug), repr(args.port)
+
+    if not args.debug:
+        mon.start_mon(conf.zookeeper, conf.minutes_data_dir)
+
+    app.run(host='0.0.0.0', port=args.port, debug=args.debug)

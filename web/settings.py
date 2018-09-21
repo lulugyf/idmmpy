@@ -41,8 +41,10 @@ index_table_count = 200
 minutes_data_dir = "minutes"
 statics_data_dir = "statics"
 log_timeout_dir = "timeoutlog"
+#conf_cache_dir = "conf_cache"
 
 database_tbs_file = "/idmm/idmm3/log/tbs.log"
 
 msg_test_log_file = "/idmm/idmm3/log/msg_test.log"
+
 

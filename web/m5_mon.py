@@ -25,18 +25,21 @@ def ftime(ago=False):
     return "%02d.%d" % (t.minute, t.second / __interval)
 
 def __list_file(data_dir):
+    fl = []
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
     else:
         for fname in os.listdir(data_dir):
             if fname[0] == '.': continue
             fname = "%s/%s"%(data_dir, fname)
-            __file_mod.append((fname, os.stat(fname).st_mtime))
-        __file_mod.sort(key=operator.itemgetter(1))
+            fl.append((fname, os.stat(fname).st_mtime))
+        fl.sort(key=operator.itemgetter(1))
+    return fl
 
 # 文件名: min.(sec/10)
 def mon_thread(zkaddr, data_dir):
-    __list_file(data_dir)
+    global __file_mod
+    __file_mod = __list_file(data_dir)
     while True:
         time.sleep(__interval)
         try:
@@ -54,12 +57,15 @@ def mon_thread(zkaddr, data_dir):
             print(e)
 
 #反向寻找更新时间的文件， 寻找最接近且小于 __timedelta 的文件
-def find_last():
+def find_last(data_dir):
     tmin = time.time() - __timedelta.seconds
     fname = None
-    #print '=== ', len(__file_mod)
-    for i in range(len(__file_mod)-1, 0, -1):
-        fm = __file_mod[i]
+    fl = __file_mod
+    if len(fl) == 0:
+        fl = __list_file(data_dir)
+    #print '=== len(__file_mod)=', len(__file_mod)
+    for i in range(len(fl)-1, 0, -1):
+        fm = fl[i]
         #print '----', fm[0], fm[1], tmin, fm[1]-tmin, __timedelta.seconds
         if fm[1] < tmin:
             break
@@ -72,9 +78,9 @@ def start_mon(zkaddr, data_dir):
     th.start()
 
 # return { "topic,client": (produce, consume), ...}
-def get_mon(qlist):
+def get_mon(qlist, data_dir):
     #print("-------get_mon")
-    fname = find_last()
+    fname = find_last(data_dir)
     if fname is None:
         print("find_last() return None")
         return

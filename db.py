@@ -1,8 +1,10 @@
 #coding=utf-8
 
 import sys
+import os
 import time
 from multiprocessing import Pool
+import cPickle as pickle
 
 '''
 set pagesize 0
@@ -36,6 +38,18 @@ select DEST_TOPIC_ID, CLIENT_ID, NOTE from topic_subscribe_rel_5;
 '''
 
 from local_db import conndb
+
+from functools import wraps
+def dbfunc(func):
+    @wraps(func)
+    def func_wrapper(*args, **kwargs):
+        db, cur = conndb()
+        try:
+            return func(db, cur, *args, **kwargs)
+        finally:
+            cur.close()
+            db.close()
+    return func_wrapper
 
 tw = 3600 * 24 * 14  # 两周的秒数
 index_count = 200
@@ -236,7 +250,7 @@ def check_unconsumed():
     topics = {}
     for rows in ret:  #合并结果集
         for r in rows:
-            k = r[0] + "@" + r[1]
+            k = r[0] + "," + r[1]
             if topics.has_key(k):
                 t = topics[k]
                 t1 = (r[2], r[3], r[4])
@@ -246,8 +260,13 @@ def check_unconsumed():
                 topics[k] = t
             else:
                 topics[k] = (r[2], r[3], r[4])
+    header = "目标主题 消费者 最小创建时间 最大创建时间 消息数".split()
+    _rows = []
     for k, t in topics.items():
         print tmstr(str(t[0])), tmstr(str(t[1])), t[2], k
+        tt = k.split(",")
+        _rows.append([tt[0], tt[1], tmstr(str(t[0])), tmstr(str(t[1])), t[2]])
+    return header, _rows
 
 # delete后, 表的存储释放   python -c "import db; db.freetablestore()"
 # select segment_name, segment_type, sum(bytes)/1024/1024 Mbytese
@@ -401,6 +420,45 @@ def getTopicsConf(ver):
     db.close()
     return ret
 
+#读取全部主题映射数据
+@dbfunc
+def dumpAllTopicConf(db, cur, verfunc, cache_dir=None):
+    header = "生产者 生产主题 映射key 映射value 消费者 消费主题 生产主题备注 消费主体备注".split()
+    if cache_dir is not None:
+        fpath = "%s/topics_all"%(cache_dir)
+        if os.path.exists(fpath):
+            st = os.stat(fpath)
+            if st.st_mtime + 300.0 > time.time():
+                with open(fpath, "rb") as f:
+                    (ver, _rows) = pickle.load(f)
+                    return ver, header, _rows
+    ver = verfunc()
+    sql = """select a.client_id, a.src_topic_id, b.attribute_key, b.attribute_value, c.client_id, c.dest_topic_id, a.note, c.note
+      from topic_publish_rel_{0} a, topic_mapping_rel_{0} b, topic_subscribe_rel_{0} c 
+      where c.dest_topic_id=b.dest_topic_id and a.src_topic_id=b.src_topic_id""".format(ver)
+    #db, cur = conndb()
+    cur.execute(sql)
+    rows =  cur.fetchall()
+    #cur.close(); db.close()
+    _rows = []
+    for r in rows:
+        _r = [f for f in r[:-2]]
+        if r[-2] != None:
+            _r.append(r[-2].decode('gbk').encode('utf-8'))
+        else:
+            _r.append("")
+        if r[-1] != None:
+            _r.append(r[-1].decode('gbk').encode('utf-8') )
+        else:
+            _r.append("")
+        _rows.append(_r)
+    if cache_dir is not None:
+        if not os.path.exists(cache_dir):
+            os.mkdir(cache_dir)
+        with open(fpath, "wb") as f:
+            pickle.dump((ver, _rows), f)
+    return ver, header, _rows
+
 # 14天前的分区清理
 # python -c "import db; db.truncate_part()"
 def truncate_part():
@@ -414,6 +472,41 @@ def truncate_part():
         sql = "alter table msgidx_part_%d truncate partition P_%s" %(i, part_no)
         print "  ", sql
 
+# 读取excel文件的内容， 保存到文本文件中， utf-8格式
+# 生成的文件直接手工改写为 .py,  把里面的内容赋值给python变量, 避免字符编码的问题
+def read_topic_excel(out_file):
+    from xlrd import open_workbook
+    import codecs
+    wb = open_workbook(r'E:\all_topics@20180921.xlsx')
+    sheet = wb.sheets()[0]
+    number_of_rows = sheet.nrows
+    number_of_columns = sheet.ncols
+    print number_of_rows, number_of_columns
+    with codecs.open(out_file, mode="w", encoding="utf-8") as f:
+        for row in range(1, number_of_rows):
+            for col in range(number_of_columns):
+                value = sheet.cell(row, col).value
+                try:
+                    #print "%d %d %s"%(row, col, value.decode("gbk").encode("utf-8"))
+                    #print row, col, value.replace("\n", "").replace("\r", "")
+                    f.write(value.replace("\n", "").replace("\r", ""))
+                    f.write('\t')
+                except Exception,x:
+                    #print row, col, repr(value), "FAIL: %s"%x
+                    f.write("\t")
+            f.write("\n")
+
+def topic_file():
+    import topics_conf as tc
+    #from importlib import reload
+    reload(tc)
+    header = tc.header
+    rows = []
+    for line in tc.topics_conf.strip().split("\n"):
+        line = line.replace("\t\t", "\t&nbsp;\t")
+        rows.append(line.strip().split("\t"))
+    return header, rows
 
 if __name__ == '__main__':
-    mult_proc()
+    #mult_proc()
+    read_topic_excel("a.txt")
