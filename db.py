@@ -328,6 +328,22 @@ def table_part_list():
     db.close()
     return headers, rows
 
+@dbfunc
+def table_part_list_sz(db, cur):
+    import operator
+    headers = "表名 分区名 占用空间大小(MB)".split()
+    rows = []
+    for tbl in ("MESSAGESTORE_0", "MSGIDX_PART_0" ):
+        print "====", tbl
+        rows.append([tbl, "", ""])
+        cur.execute("select PARTITION_NAME, sum(bytes)/1024/1024 from user_segments where  segment_name =:v1 group by PARTITION_NAME", (tbl, ))
+        _r = []
+        for r in cur.fetchall():
+            _r.append(["", r[0], r[1]])
+        _r1 = sorted(_r, key=operator.itemgetter(1))
+        rows.extend(_r1)
+    return headers, rows
+
 # python -c "import db; db.msgcountDate('2018-09-03 00:00:00', '2018-09-04 00:00:00')" |sort >9.3
 # python -c "import db; db.msgcountDate('2018-09-02 00:00:00', '2018-09-03 00:00:00')" |sort >9.2
 # python -c "import db; db.msgcountDate('2018-09-04 00:00:00', '2018-09-05 00:00:00')" |sort >9.4
@@ -506,6 +522,126 @@ def topic_file():
         line = line.replace("\t\t", "\t&nbsp;\t")
         rows.append(line.strip().split("\t"))
     return header, rows
+
+def gen_bak_sql():
+    part_str = "27"
+    num_store = 1000
+    num_idx = 200
+    if len(sys.argv) > 1 and sys.argv[1] == 'insert':
+        print "set timing on;"
+        print "set AUTOCOMMIT on;"
+        print """create table messagestore_daily_{0} tablespace TBS_IDMMDB_IDX as select * from messagestore_0 where 1=2;
+    alter table messagestore_daily_{0} nologging;
+    create table msgidx_part_daily_{0} tablespace TBS_IDMMDB_IDX as select * from msgidx_part_0 where 1=2;
+    alter table msgidx_part_daily_{0} nologging;""".format(part_str)
+        for i in range(num_store):
+            print "insert into messagestore_daily_%s select * from messagestore_%d partition (p_%s) nologging;" % (
+                    part_str, i, part_str)
+        for i in range(num_idx):
+            print "insert into msgidx_part_daily_%s select * from msgidx_part_%d partition (p_%s) nologging;" % (
+                    part_str, i, part_str)
+    else:
+        print "set timing on;"
+        print "set AUTOCOMMIT on;"
+        for i in range(num_store): print "alter table messagestore_%d truncate partition p_%s;" % (i, part_str)
+        for i in range(num_idx): print "alter table msgidx_part_%d truncate partition p_%s;" % (i, part_str)
+
+'''
+    cur.execute("create table messagestore_daily_{0} tablespace TBS_IDMMDB_IDX as select * from messagestore_0 where 1=2".format(part_str))
+    cur.execute("alter table messagestore_daily_{0} nologging".format(part_str))
+    cur.execute("create table msgidx_part_daily_{0} tablespace TBS_IDMMDB_IDX as select * from msgidx_part_0 where 1=2".format(part_str))
+    cur.execute("alter table msgidx_part_daily_{0} nologging".format(part_str))
+    for i in range(num_store):
+        t1 = time.time()
+        cur.execute("insert into messagestore_daily_%s select * from messagestore_%d partition (p_%s) nologging" % (
+            part_str, i, part_str) )
+        rowcount = cur.rowcount
+        cur.execute("alter table messagestore_%d truncate partition p_%s" % (i, part_str) )
+        db.commit()
+        print "messagestore-%d  %d rows, time: %.3f s"%(i, rowcount, time.time()-t1)
+    for i in range(num_idx):
+        t1 = time.time()
+        cur.execute("insert into msgidx_part_daily_%s select * from msgidx_part_%d partition (p_%s) nologging" % (
+            part_str, i, part_str) )
+        rowcount = cur.rowcount
+        cur.execute("alter table msgidx_part_%d truncate partition p_%s;" % (i, part_str))
+        db.commit()
+        print "msgidx-%d  %d rows, time: %.3f s" % (i, rowcount, time.time() - t1)
+
+    cur.execute("select sum(bytes)/1024/1024 Mbytese from user_segments where  segment_name =:v1", ('MESSAGESTORE_DAILY_%s'%part_str, ) )
+    print "MESSAGESTORE_DAILY_ size in mbytes: %s" % cur.fetchone()[0]
+    cur.execute("select sum(bytes)/1024/1024 Mbytese from user_segments where  segment_name =:v1", ('MSGIDX_PART_DAILY_%s'%part_str, ) )
+    print "MSGIDX_PART_DAILY_ size in mbytes: %s" % cur.fetchone()[0]
+    '''
+
+import subprocess as sb
+def lexec(cmd, shell=False):
+    try:
+        output = sb.check_output(cmd, shell=shell)
+        return output, None
+    except sb.CalledProcessError, x:
+        sys.stderr.write("failed!  return code=%s" % x.returncode)
+        return None, x.output
+
+def __parted_backup_sub(args):
+    dbstr, tbl, part, bak_dir = args
+    log_file = open("/idmm/idmm3/log/pp_%d"%os.getpid(), "a")
+    log_file.write("%.3f %s %s begin\n"%(time.time(), tbl, part))
+    db, cur = conndb(dbstr)
+    log_file.write("%.3f %s %s db connected\n"%(time.time(), tbl, part))
+    try:
+        cur.execute("select sum(bytes)/1024/1024 from user_segments where  segment_name =:v1 and PARTITION_NAME=:v2", (tbl, part) )
+        if cur.fetchone()[0] < 1.0:
+            print "partition %s - %s is empty"%(tbl, part)
+            log_file.write("%.3f %s %s empty return\n" % (time.time(), tbl, part))
+            return tbl, part, "0"
+        log_file.write("%.3f %s %s empty checked\n" % (time.time(), tbl, part))
+        t1 = time.time()
+        cmd_str1 = "exp {2} file={3}/{0}.dmp tables={0}:{1} rows=y indexes=n triggers=n grants=n".format(tbl, part, dbstr, bak_dir)
+        sout, serr = lexec(cmd_str1, shell=True)
+        log_file.write("%.3f %s %s done exp\n" % (time.time(), tbl, part))
+        if serr is not None:
+            print "FAIL: %s" % serr
+        else:
+            cur.execute("alter table %s truncate partition %s" % (tbl, part))
+            print "SUCC: %s %.3f" %( sout, time.time() - t1)
+            log_file.write("%.3f %s %s done truncat\n" % (time.time(), tbl, part))
+            sout, serr = lexec("gzip {0}/{1}.dmp".format(bak_dir, tbl), shell=True)
+    except Exception,x:
+        print "-----FAIL--%s"%x
+        return tbl, part, str(x)
+    finally:
+        db.close()
+        log_file.write("%.3f %s %s db closed\n" % (time.time(), tbl, part))
+        log_file.close()
+    return tbl, part, "%.3f"%(time.time()-t1)
+
+# 分区表模式备份数据， 思路， 先把多表的同一分区数据集中到一张表中， 然后使用exp 工具dump出来， 然后drop 掉
+# 备份29天前的分区
+# insert 操作大概要30多分钟,   python -c "import db; db.parted_backup(-28)"
+def parted_backup(ndays=-29):
+    os.putenv('NLS_LANG', 'American_America.zhs16gbk')
+    back_date = datedelta(ndays)
+    part_str = back_date[-2:]
+    num_store = 1000
+    num_idx = 200
+
+    bak_dir = "/idmm/msg_bak/%s"%back_date
+    lexec("mkdir -p %s"%bak_dir, shell=True)
+    from local_db import getconndb_str
+    dbstr = getconndb_str()
+
+    args = [(dbstr, 'MESSAGESTORE_%d'%i, 'P_%s'%part_str, bak_dir) for i in range(num_store)]
+    args.extend([(dbstr, 'MSGIDX_PART_%d'%i, 'P_%s'%part_str, bak_dir) for i in range(num_idx)])
+
+    n_proc = 20
+    if n_proc > 1:
+        pool = Pool(processes=n_proc)
+        ret = pool.map(__parted_backup_sub, args)
+        pool.close()
+    else:
+        ret = [__parted_backup_sub(arg) for arg in args]
+    for r in ret: print r
 
 if __name__ == '__main__':
     #mult_proc()

@@ -245,7 +245,7 @@ def scp_log_files(host_list, out_dir):
 
     sout, serr = lexec(["sh", sh_file])
     if serr is not None:
-        sys.stderr.write("failed!  return code=%s  %s" % (x.returncode, x.output) )
+        sys.stderr.write("failed!  return code= %s" % (serr) )
         return None
     print sout
 

@@ -84,8 +84,8 @@ def msg_test(out):
 @app.route('/part_list')
 @pagehandle("表分区数据量估计(分区表模式)")
 def part_list(out):
-    header, rows = db.table_part_list()
-    pg.gentable("表分区记录数估计", header, rows, out)
+    header, rows = db.table_part_list_sz()
+    pg.gentable("表分区大小估计", header, rows, out)
 
 @app.route('/log_timeouts')
 @pagehandle("数据库超时告警日志统计", css='<link href="/static/c3.min.css" rel="stylesheet">')
@@ -431,6 +431,7 @@ def qinfo():
 
 import argparse
 
+# python fweb.py --port=8185 --debug=True
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", default=8183, type=int, help="Port to listen on")
