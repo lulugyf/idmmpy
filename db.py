@@ -598,15 +598,19 @@ def __parted_backup_sub(args):
         log_file.write("%.3f %s %s empty checked\n" % (time.time(), tbl, part))
         t1 = time.time()
         cmd_str1 = "exp {2} file={3}/{0}.dmp tables={0}:{1} rows=y indexes=n triggers=n grants=n".format(tbl, part, dbstr, bak_dir)
-        sout, serr = lexec(cmd_str1, shell=True)
+        sout, serr, x = shell_exec(cmd_str1)
         log_file.write("%.3f %s %s done exp\n" % (time.time(), tbl, part))
-        if serr is not None:
-            print "FAIL: %s" % serr
-        else:
+        if type(serr) == str and serr.find("Export terminated successfully") > 0:
+            t2 = time.time()
             cur.execute("alter table %s truncate partition %s" % (tbl, part))
-            print "SUCC: %s %.3f" %( sout, time.time() - t1)
+            t3 = time.time()
             log_file.write("%.3f %s %s done truncat\n" % (time.time(), tbl, part))
-            sout, serr = lexec("gzip {0}/{1}.dmp".format(bak_dir, tbl), shell=True)
+            sout, _serr, x = shell_exec("gzip {0}/{1}.dmp".format(bak_dir, tbl))
+            t4 = time.time()
+            print "SUCC: %s \nexp-time: %.3f trunc-time: %.3f gz-time: %.3f %s" %( serr,
+                                t2-t1, t3-t2, t4-t3, time.strftime("%Y%m%d-%H%M%S"))
+        else:
+            print "FAIL: serr: %s\nsout: %s\nx:%s  %s" % (serr, sout, x, time.strftime("%Y%m%d-%H%M%S"))
     except Exception,x:
         print "-----FAIL--%s"%x
         return tbl, part, str(x)
@@ -642,6 +646,24 @@ def parted_backup(ndays=-29):
     else:
         ret = [__parted_backup_sub(arg) for arg in args]
     for r in ret: print r
+
+def shell_exec(cmd):
+    try:
+        p = sb.Popen(cmd, stdout=sb.PIPE, stderr=sb.PIPE, shell=True)
+        sout = p.stdout.read()
+        serr = p.stderr.read()
+        p.terminate()
+        return sout, serr, None
+    except sb.CalledProcessError, x:
+        sys.stderr.write("failed!  return code=%s" % x.returncode)
+        return None, x.returncode, x.output
+
+def test1():
+    cmdstr = "exp idmmopr/ykRwj_b6@idmmdb2 file=/tmp/t1.dmp DIRECT=y BUFFER=2000000 tables=messagestore_4:p_29 rows=y indexes=n triggers=n grants=n"
+    sout, serr, x = shell_exec(cmdstr)
+    print "SOUT:", sout
+    print "SERR:", serr
+    print "X:", x
 
 if __name__ == '__main__':
     #mult_proc()
