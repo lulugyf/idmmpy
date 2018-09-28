@@ -66,3 +66,41 @@ new Chartist.Line('#pointlabel', data, options);
       });
   }
 
+
+  new Chartist.Line('#chart1', {
+        labels: [%s],
+        series: [
+        [%s],
+        [%s]]
+      }, {
+  chartPadding: {
+    top: 20,
+    right: 0,
+    bottom: 30,
+    left: 0
+  },
+  plugins: [
+    Chartist.plugins.ctAxisTitle({
+      axisX: {
+        axisTitle: 'Time (mins)',
+        axisClass: 'ct-axis-title',
+        offset: {
+          x: 0,
+          y: 50
+        },
+        textAnchor: 'middle'
+      },
+      axisY: {
+        axisTitle: 'Goals',
+        axisClass: 'ct-axis-title',
+        offset: {
+          x: 0,
+          y: 0
+        },
+        textAnchor: 'middle',
+        flipTitle: false
+      }
+    })
+  ]
+});
+

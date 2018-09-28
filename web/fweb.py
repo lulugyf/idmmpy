@@ -75,11 +75,11 @@ def pg_check_unconsumed(out):
     header, rows = db.check_unconsumed()
     pg.gentable("未消费消息情况", header, rows, out)
 
-@app.route('/msg_test')
-@pagehandle("消息收发探测采集")
-def msg_test(out):
-    header, rows = rsh.read_msg_test_log(conf.msg_test_log_file, 144)
-    pg.gentable("消息收发探测采集记录", header, rows, out)
+# @app.route('/msg_test')
+# @pagehandle("消息收发探测采集")
+# def msg_test(out):
+#     header, rows = rsh.read_msg_test_log(conf.msg_test_log_file, 144)
+#     pg.gentable("消息收发探测采集记录", header, rows, out)
 
 @app.route('/part_list')
 @pagehandle("表分区数据量估计(分区表模式)")
@@ -428,6 +428,69 @@ def qinfo():
                 r)
     pg.page_tail(r)
     return r.getvalue()
+
+@app.route("/msg_test")
+def chart():
+    import pagegen_chart as pc
+    out = StringIO()
+    pc.chart_head("消息收发探测采集", out)
+    #  conf.msg_test_log_file  "../local/msg_test.log"
+    header, rows = rsh.read_msg_test_log(conf.msg_test_log_file, count=72)
+
+    #labels1 = pc.label_shrink( [r[0][:-3] for r in rows] )
+    labels1 = [r[0][5:-3] for r in rows]
+
+    labels = ",".join( ["'%s'"%l for l in labels1] )
+    line_send = ",".join([str(r[2]) for r in rows])
+    line_recv = ",".join([str(r[4]) for r in rows])
+    out.write('''
+    <h1> 消息收发探测结果展示 </h1>
+    <div class="ct-chart ct-golden-section" id="chart1"></div>
+    
+    <script>
+    new Chartist.Line('#chart1', {
+        labels: [%s],
+        series: [
+        [%s],
+        [%s]]
+      }, {
+  chartPadding: {
+    top: 20,
+    right: 0,
+    bottom: 30,
+    left: 0
+  }, 
+  plugins: [
+    Chartist.plugins.ctAxisTitle({
+      axisX: {
+        axisTitle: 'Test-Date-Time',
+        axisClass: 'ct-axis-title',
+        offset: {
+          x: 0,
+          y: 80
+        },
+        textAnchor: 'middle'
+      },
+      axisY: {
+        axisTitle: 'Response-Time-MS',
+        axisClass: 'ct-axis-title',
+        offset: {
+          x: 20,
+          y: 0
+        },
+        textAnchor: 'middle',
+        flipTitle: false
+      }
+    })
+  ]
+});
+    </script>
+    ''' % (labels, line_send, line_recv ))
+
+    pg.gentable("测试结果", header, rows, out)
+
+    pc.chart_tail(out)
+    return out.getvalue()
 
 import argparse
 
