@@ -575,6 +575,17 @@ def gen_bak_sql():
     '''
 
 import subprocess as sb
+def shell_exec(cmd):
+    try:
+        p = sb.Popen(cmd, stdout=sb.PIPE, stderr=sb.PIPE, shell=True)
+        sout = p.stdout.read()
+        serr = p.stderr.read()
+        p.terminate()
+        return sout, serr, None
+    except sb.CalledProcessError, x:
+        sys.stderr.write("failed!  return code=%s" % x.returncode)
+        return None, x.returncode, x.output
+
 def lexec(cmd, shell=False):
     try:
         output = sb.check_output(cmd, shell=shell)
@@ -620,10 +631,13 @@ def __parted_backup_sub(args):
         log_file.close()
     return tbl, part, "%.3f"%(time.time()-t1)
 
-# 分区表模式备份数据， 思路， 先把多表的同一分区数据集中到一张表中， 然后使用exp 工具dump出来， 然后drop 掉
+
+# 分区表模式备份数据， 使用exp 工具按分区dump出来， 然后把该分区truncate 掉, 并把dump文件gz压缩, 最后上传到 hadoop上
 # 备份29天前的分区
 # insert 操作大概要30多分钟,   python -c "import db; db.parted_backup(-28)"
-def parted_backup(ndays=-29):
+# 本地磁盘文件保存3天, hadoop上保留70天
+def parted_backup(ndays=-29, keep_on_disk=3, keep_on_hdfs=70):
+    import math
     os.putenv('NLS_LANG', 'American_America.zhs16gbk')
     back_date = datedelta(ndays)
     part_str = back_date[-2:]
@@ -639,6 +653,7 @@ def parted_backup(ndays=-29):
     args.extend([(dbstr, 'MSGIDX_PART_%d'%i, 'P_%s'%part_str, bak_dir) for i in range(num_idx)])
 
     n_proc = 20
+    print "----BEGIN proc=%d %s" %(n_proc, time.strftime("%Y-%m-%d %H:%M:%S") )
     if n_proc > 1:
         pool = Pool(processes=n_proc)
         ret = pool.map(__parted_backup_sub, args)
@@ -646,17 +661,36 @@ def parted_backup(ndays=-29):
     else:
         ret = [__parted_backup_sub(arg) for arg in args]
     for r in ret: print r
-
-def shell_exec(cmd):
     try:
-        p = sb.Popen(cmd, stdout=sb.PIPE, stderr=sb.PIPE, shell=True)
-        sout = p.stdout.read()
-        serr = p.stderr.read()
-        p.terminate()
-        return sout, serr, None
-    except sb.CalledProcessError, x:
-        sys.stderr.write("failed!  return code=%s" % x.returncode)
-        return None, x.returncode, x.output
+        print "----END %s" % time.strftime("%Y-%m-%d %H:%M:%S")
+        print "-- HDFS upload %s, dir=%s"%( time.strftime("%Y-%m-%d %H:%M:%S"), back_date)
+        os.chdir("/idmm/msg_bak")
+        sb.check_output("hadoop fs -put %s"%back_date, shell=True)
+        print "-- HDFS upload end %s, dir=%s"%( time.strftime("%Y-%m-%d %H:%M:%S"), back_date)
+    # if __name__ == '__main__':
+    #     import subprocess as sb
+    #     import time
+    #     import math
+    #     back_date = '2018-09-02'
+        sout = sb.check_output("hadoop fs -du|grep %s|awk '{print $1}'" % back_date, shell=True)
+        sout1 = sb.check_output("du -sk *|grep %s|awk '{print $1}'"%back_date, shell=True)
+        sz1 = float(sout.strip())/1024
+        sz2 = float(sout1.strip())
+        if math.fabs((sz1-sz2)/sz2) < 0.01:  # 比较hdfs和local disk上的同一文件目录体积差异, 小于0.01认为正常
+            print "size correct, delete local file ndays=%d-3 " % ndays
+            cmd = "rm -rf %s" % ( " ".join([datedelta(ndays-keep_on_disk-i) for i in range(3)]))
+            out, err, x = shell_exec(cmd)
+            print "cmd=%s\nout=%s\nerr=%s" % (cmd, out, err)
+            cmd = "hadoop fs -rm -r %s" % ( " ".join(datedelta(ndays-keep_on_hdfs-i) for i in range(3)))
+            out, err, x = shell_exec(cmd)
+            print "cmd=%s\nout=%s\nerr=%s"% (cmd, out, err)
+        else:
+            print "WARN: size incorrect"
+    except Exception,x:
+        print "fail: %s" % x
+
+    print "----ALL DONE %s" % time.strftime("%Y-%m-%d %H:%M:%S")
+
 
 def test1():
     cmdstr = "exp idmmopr/ykRwj_b6@idmmdb2 file=/tmp/t1.dmp DIRECT=y BUFFER=2000000 tables=messagestore_4:p_29 rows=y indexes=n triggers=n grants=n"

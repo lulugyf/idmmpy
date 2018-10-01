@@ -412,6 +412,7 @@ def qinfo():
     import operator
     import time
 
+    show_all = request.args.get('showall', "0")
     zkaddr = conf.zookeeper
     qlist = ble.listQ(zkaddr)
     qlist = sorted(qlist, key=operator.attrgetter('size', 'err', 'total'), reverse=True)
@@ -422,9 +423,13 @@ def qinfo():
 
     headers = "BLE-ID 消息主题 消费者ID 总量 积压 失败 在途 status 5m生产 5m消费".split()
     mon.get_mon(qlist, conf.minutes_data_dir)
+    if show_all == "true":
+        rows = [(q.bleid, q.topic, q.client, q.total, q.size, q.err, q.sending, q.status, q.m5_prod, q.m5_cons) for q in qlist]
+    else:
+        rows = [(q.bleid, q.topic, q.client, q.total, q.size, q.err, q.sending, q.status, q.m5_prod, q.m5_cons) for q in qlist if q.total>0]
     pg.gentable(title,
                 headers,
-                [(q.bleid, q.topic, q.client, q.total, q.size, q.err, q.sending, q.status, q.m5_prod, q.m5_cons) for q in qlist if q.total>0],  #if q.topic=='TDst2'
+                rows,  #if q.topic=='TDst2'
                 r)
     pg.page_tail(r)
     return r.getvalue()
