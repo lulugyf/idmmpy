@@ -10,7 +10,7 @@ import time
 from functools import wraps
 import cPickle as pickle
 
-from flask import Flask, request
+from flask import Flask, request, render_template
 
 import pagegen as pg
 import rsh
@@ -81,11 +81,21 @@ def pg_check_unconsumed(out):
 #     header, rows = rsh.read_msg_test_log(conf.msg_test_log_file, 144)
 #     pg.gentable("消息收发探测采集记录", header, rows, out)
 
+# @app.route('/part_list')
+# @pagehandle("表分区数据量估计(分区表模式)")
+# def part_list(out):
+#     tblno=request.args.get("tblno", "0")
+#     header, rows = db.table_part_list_sz(tblno)
+#     pg.gentable("表分区大小估计", header, rows, out)
 @app.route('/part_list')
-@pagehandle("表分区数据量估计(分区表模式)")
-def part_list(out):
-    header, rows = db.table_part_list_sz()
-    pg.gentable("表分区大小估计", header, rows, out)
+def part_list():
+    tblno=request.args.get("tblno", "0")
+    tbl1 = "MESSAGESTORE_%s"%tblno
+    xx1, yy1 = db.table_part_list_c3(tbl1)
+    tbl2 = "MSGIDX_PART_%s"%tblno
+    xx2, yy2 = db.table_part_list_c3(tbl2)
+    title="表分区数据量估计(分区表模式)"
+    return render_template('part_list.html', yy1=yy1, xx1=xx1, title=title, xx2=xx2, yy2=yy2, tbl1=tbl1, tbl2=tbl2)
 
 @app.route('/log_timeouts')
 @pagehandle("数据库超时告警日志统计", css='<link href="/static/c3.min.css" rel="stylesheet">')

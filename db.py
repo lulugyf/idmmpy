@@ -329,11 +329,11 @@ def table_part_list():
     return headers, rows
 
 @dbfunc
-def table_part_list_sz(db, cur):
+def table_part_list_sz(db, cur, tbl_no="0"):
     import operator
     headers = "表名 分区名 占用空间大小(MB)".split()
     rows = []
-    for tbl in ("MESSAGESTORE_0", "MSGIDX_PART_0" ):
+    for tbl in ("MESSAGESTORE_%s"%tbl_no, "MSGIDX_PART_%s"%tbl_no ):
         print "====", tbl
         rows.append([tbl, "", ""])
         cur.execute("select PARTITION_NAME, sum(bytes)/1024/1024 from user_segments where  segment_name =:v1 group by PARTITION_NAME", (tbl, ))
@@ -343,6 +343,16 @@ def table_part_list_sz(db, cur):
         _r1 = sorted(_r, key=operator.itemgetter(1))
         rows.extend(_r1)
     return headers, rows
+
+@dbfunc
+def table_part_list_c3(db, cur, tbl):
+    import operator
+    cur.execute("select PARTITION_NAME, sum(bytes)/1024/1024 from user_segments where  segment_name =:v1 group by PARTITION_NAME", (tbl, ))
+    _r = [(r[0], "%.3f"%r[1]) for r in cur.fetchall()]
+    _r1 = sorted(_r, key=operator.itemgetter(0))
+    yy = ",".join([r[1] for r in _r1])
+    xx = ",".join(["'%s'"%r[0] for r in _r1])
+    return xx, yy
 
 # python -c "import db; db.msgcountDate('2018-09-03 00:00:00', '2018-09-04 00:00:00')" |sort >9.3
 # python -c "import db; db.msgcountDate('2018-09-02 00:00:00', '2018-09-03 00:00:00')" |sort >9.2
@@ -595,27 +605,28 @@ def lexec(cmd, shell=False):
         return None, x.output
 
 def __parted_backup_sub(args):
-    dbstr, tbl, part, bak_dir = args
-    log_file = open("/idmm/idmm3/log/pp_%d"%os.getpid(), "a")
-    log_file.write("%.3f %s %s begin\n"%(time.time(), tbl, part))
+    dbstr, tbl, part, bak_dir, truncate = args
+    # log_file = open("/idmm/idmm3/log/pp_%d"%os.getpid(), "a")
+    # log_file.write("%.3f %s %s begin\n"%(time.time(), tbl, part))
     db, cur = conndb(dbstr)
-    log_file.write("%.3f %s %s db connected\n"%(time.time(), tbl, part))
+    # log_file.write("%.3f %s %s db connected\n"%(time.time(), tbl, part))
     try:
         cur.execute("select sum(bytes)/1024/1024 from user_segments where  segment_name =:v1 and PARTITION_NAME=:v2", (tbl, part) )
         if cur.fetchone()[0] < 1.0:
             print "partition %s - %s is empty"%(tbl, part)
-            log_file.write("%.3f %s %s empty return\n" % (time.time(), tbl, part))
+            # log_file.write("%.3f %s %s empty return\n" % (time.time(), tbl, part))
             return tbl, part, "0"
-        log_file.write("%.3f %s %s empty checked\n" % (time.time(), tbl, part))
+        # log_file.write("%.3f %s %s empty checked\n" % (time.time(), tbl, part))
         t1 = time.time()
         cmd_str1 = "exp {2} file={3}/{0}.dmp tables={0}:{1} rows=y indexes=n triggers=n grants=n".format(tbl, part, dbstr, bak_dir)
         sout, serr, x = shell_exec(cmd_str1)
-        log_file.write("%.3f %s %s done exp\n" % (time.time(), tbl, part))
+        # log_file.write("%.3f %s %s done exp\n" % (time.time(), tbl, part))
         if type(serr) == str and serr.find("Export terminated successfully") > 0:
             t2 = time.time()
-            cur.execute("alter table %s truncate partition %s" % (tbl, part))
+            if truncate == True:
+                cur.execute("alter table %s truncate partition %s" % (tbl, part))
             t3 = time.time()
-            log_file.write("%.3f %s %s done truncat\n" % (time.time(), tbl, part))
+            # log_file.write("%.3f %s %s done truncat\n" % (time.time(), tbl, part))
             sout, _serr, x = shell_exec("gzip {0}/{1}.dmp".format(bak_dir, tbl))
             t4 = time.time()
             print "SUCC: %s \nexp-time: %.3f trunc-time: %.3f gz-time: %.3f %s" %( serr,
@@ -627,16 +638,16 @@ def __parted_backup_sub(args):
         return tbl, part, str(x)
     finally:
         db.close()
-        log_file.write("%.3f %s %s db closed\n" % (time.time(), tbl, part))
-        log_file.close()
+        # log_file.write("%.3f %s %s db closed\n" % (time.time(), tbl, part))
+        # log_file.close()
     return tbl, part, "%.3f"%(time.time()-t1)
 
 
 # 分区表模式备份数据， 使用exp 工具按分区dump出来， 然后把该分区truncate 掉, 并把dump文件gz压缩, 最后上传到 hadoop上
 # 备份29天前的分区
-# insert 操作大概要30多分钟,   python -c "import db; db.parted_backup(-28)"
+# insert 操作大概要30多分钟,   python -c "import db; db.parted_backup(-28, 3, 70, False)"
 # 本地磁盘文件保存3天, hadoop上保留70天
-def parted_backup(ndays=-29, keep_on_disk=3, keep_on_hdfs=70):
+def parted_backup(ndays=-28, keep_on_disk=3, keep_on_hdfs=70, truncate=True):
     import math
     os.putenv('NLS_LANG', 'American_America.zhs16gbk')
     back_date = datedelta(ndays)
@@ -649,8 +660,8 @@ def parted_backup(ndays=-29, keep_on_disk=3, keep_on_hdfs=70):
     from local_db import getconndb_str
     dbstr = getconndb_str()
 
-    args = [(dbstr, 'MESSAGESTORE_%d'%i, 'P_%s'%part_str, bak_dir) for i in range(num_store)]
-    args.extend([(dbstr, 'MSGIDX_PART_%d'%i, 'P_%s'%part_str, bak_dir) for i in range(num_idx)])
+    args = [(dbstr, 'MESSAGESTORE_%d'%i, 'P_%s'%part_str, bak_dir, truncate) for i in range(num_store)]
+    args.extend([(dbstr, 'MSGIDX_PART_%d'%i, 'P_%s'%part_str, bak_dir, truncate) for i in range(num_idx)])
 
     n_proc = 20
     print "----BEGIN proc=%d %s" %(n_proc, time.strftime("%Y-%m-%d %H:%M:%S") )

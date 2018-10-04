@@ -24,7 +24,7 @@ def gentable(title, header, rows, out):
     out.write("</table>")
 
 def page_head_css(title, out, css=None):
-    out.write("<html><header><meta charset=\"utf-8\"><title>%s %s</title>"%(title, conf.title_suffix) )
+    out.write("<html><head><meta charset=\"utf-8\"><title>%s %s</title>"%(title, conf.title_suffix) )
     out.write("""    <style>
         table
         {
