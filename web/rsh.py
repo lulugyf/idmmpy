@@ -8,6 +8,7 @@ import json
 import sys
 import os
 
+sys.path.append('..')
 import tm
 
 def rexec(host, user, cmd):
@@ -273,6 +274,83 @@ def scp_log_files(host_list, out_dir):
     else:
         return sout
 
+# qmon脚本每5分钟采集的队列积压数据, 统计按主题和时间的生产/消费数量表格
+def stastic_5m_all(fpath='/idmm/idmm3/mon/_bak'):
+    if not os.path.exists(fpath):
+        return [],[],[]
+    dic = {}
+    def one_file(f):
+        total = 0
+        size = 0
+        for line in open(f):
+            ff = line.split()
+            if len(ff) != 6:
+                continue
+            total += int(ff[2])
+            size += int(ff[3])
+        return total, size
+    for f in os.listdir(fpath):
+        # fname:  qmon_fq_2018-05-08-0105
+        if not f.startswith('qmon'):
+            continue
+        dd = f[8:]
+        ret = one_file(fpath+"/"+f)
+        if dic.has_key(dd):
+            v = dic[dd]
+            dic[dd] = (v[0]+ret[0], v[1]+ret[1])
+        else:
+            dic[dd] = ret
+
+    lst = [(k, v[0], v[1]) for k, v in dic.items()]
+    lst = sorted(lst, key=lambda v: v[0])
+
+    x = []
+    y1 = []
+    y2 = []
+    vl = lst[0]
+    for v in lst:
+        #print v[0], v[1]-vl[1], v[1]-vl[1]-(v[2]-vl[2])
+        x.append(v[0])
+        y1.append(v[1]-vl[1])
+        y2.append(v[1]-vl[1]-(v[2]-vl[2]))
+        vl = v
+    return ",".join(["'%s'"%i[11:] for i in x]), ",".join(["%d"%i for i in y1]), ",".join(["%d"%i for i in y2])
+
+# qmon脚本每5分钟采集的队列积压数据, 统计按主题和时间的生产/消费数量表格
+# python -c "import rsh; rsh.stastic_5m('../local/mon')"
+def stastic_5m(fpath='/idmm/idmm3/mon/_bak'):
+    if not os.path.exists(fpath):
+        return '',''
+    ys = {}
+    def _one_file(f):
+        for line in open(f):
+            ff = line.split()
+            if len(ff) != 6:
+                continue
+            total, size = int(ff[2]), int(ff[3])
+            k = "%s,%s"%(ff[0][1:-1], ff[1])
+            #print '    ', k, total, size
+            if ys.has_key(k):
+                v = ys[k]
+                v.append((total, size))
+            else:
+                ys[k] = [(total, size),]
+
+    xs = []
+    flist = sorted([f for f in os.listdir(fpath) if f.startswith("qmon_xq")] )
+    for f in flist:
+        # fname:  qmon_fq_2018-05-08-0105
+        xs.append(f[13:])
+        #print f
+        _one_file(fpath+"/"+f)
+    lines = []
+    for k, v in ys.items():
+        p = "['%s', %s]"%(k+"-P", ",".join(["%d"%(v[i][0]-v[i-1][0], ) for i in range(1,len(v))]) )
+        c = "['%s', %s]" % (k + "-C", ",".join(["%d" % (v[i][0]-v[i-1][0]-(v[i][1] - v[i-1][1]),) for i in range(1, len(v))]))
+        lines.append(p)
+        #lines.append(c)
+
+    return ",".join(["'%s'"%i[11:] for i in xs]), ",\n".join(lines[:12])
 
 
 def main():

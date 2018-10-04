@@ -1,0 +1,40 @@
+<html>
+<head>
+    <meta charset=\"utf-8\">
+    <title>{{title.decode('utf-8')}} {{title_suffix}}</title>
+    <link href="/static/c3.min.css" rel="stylesheet">
+</head>
+
+<body onload="chart1()">
+<a href="/">返回首页</a><br/>
+
+    <script src="/static/c3.min.js"></script>
+    <script src="/static/d3-5.4.0.min.js"></script>
+
+<br/> IDMM 按时段的生产消费消息数量统计(按主题)
+<div id="chart1"></div>
+
+<script>
+function chart1(){
+    var chart = c3.generate({
+        bindto: '#chart1',
+        data: {
+            columns: [
+                {{yy|safe}}
+            ]
+        },
+        axis: {
+            y: {
+             label: { text: '消息数量', position: 'outer-middle' }
+            },
+            x: {
+             label: { text: '时间', position: 'outer-middle' },
+                type: 'category',
+                categories: [ {{xx1|safe}} ]
+            }
+        }
+    });
+}
+</script>
+</body>
+</html>

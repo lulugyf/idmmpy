@@ -54,6 +54,8 @@ def rootpage():
     &sect; <a href="/check_unconsumed"><b>未消费消息检查 </b></a><br/><br/>
     &sect; <a href="/all_topics"><b>主题配置信息 </b></a><br/><br/>
     &sect; <a href="/all_topics_file"><b>主题配置信息(文件) </b></a><br/><br/>
+    &sect; <a href="/5m_pc_all"><b>当天消息生产消费数量统计  </b></a><br/><br/>
+    &sect; <a href="/5m_pc"><b>当天消息生产消费数量统计(按主题)  </b></a><br/><br/>
     &sect; <a href=""><b>  <br/></a><br/><br/>
     """
 
@@ -96,6 +98,17 @@ def part_list():
     xx2, yy2 = db.table_part_list_c3(tbl2)
     title="表分区数据量估计(分区表模式)"
     return render_template('part_list.html', yy1=yy1, xx1=xx1, title=title, xx2=xx2, yy2=yy2, tbl1=tbl1, tbl2=tbl2)
+@app.route('/5m_pc_all')
+def stastic_5m_all():
+    xx1, yy1, yy2 = rsh.stastic_5m_all()
+    title="5分钟消息总量统计"
+    return render_template('5m_pc_all.html', yy1=yy1, xx1=xx1, title=title, yy2=yy2)
+@app.route('/5m_pc')
+def stastic_5m():
+    xx, yy = rsh.stastic_5m()
+    title="5分钟消息总量统计(按主题)"
+    return render_template('5m_pc.html', title=title, xx=xx, yy=yy)
+
 
 @app.route('/log_timeouts')
 @pagehandle("数据库超时告警日志统计", css='<link href="/static/c3.min.css" rel="stylesheet">')
