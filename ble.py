@@ -32,6 +32,8 @@ def get_jmxaddr(zkaddr, ble_only=False):
     ble_ports = []
     base = '/idmm/ble'
     for p in z.list(base):
+        if not p.startswith('id.') or len(p) < 11:
+            continue
         data = z.get(base + '/' + p)
         data1 = data[0]
         bleid = p[p.find('.') + 1:]
@@ -75,6 +77,8 @@ def getnodeinfo(zkaddr):
     ble = []
     base = '/idmm/ble'
     for p in z.list(base):
+        if not p.startswith('id.') or len(p) < 11:
+            continue
         data = z.get(base + '/' + p)
         data1 = data[0]
         bleid = p[p.find('.') + 1:]
@@ -133,6 +137,8 @@ def getaddrs(zkaddr):
     f = file(getpath('.ble.list'), 'w')
     base = '/idmm/ble'
     for p in z.list(base):
+        if not p.startswith('id.') or len(p) < 11:
+            continue
         data = z.get(base+'/'+p)
         data1 = data[0]
         bleid = p[p.find('.')+1:]
@@ -198,7 +204,8 @@ def mem(zkaddr):
     ble_ports.extend(broker_ports)
     print "---HeapMemoryUsage:"
     for id, jmxaddr in ble_ports:
-        url = jmxaddr + "read/java.lang:type=Memory"
+        #print '--- jmxaddr:', jmxaddr
+        url = "http://%s/jolokia/read/java.lang:type=Memory" % jmxaddr
         s = urllib2.urlopen(url)
         o = json.load(s)
         o1 = o[u'value']['HeapMemoryUsage']
@@ -207,8 +214,8 @@ def mem(zkaddr):
 
 
 if __name__ == '__main__':
-    from local_db import conf_zk_addr
-    #zkaddr = '172.21.0.46:3181'
-    zkaddr = conf_zk_addr()
+    zkaddr = '172.18.231.45:7181'
+    #from local_db import conf_zk_addr
+    #zkaddr = conf_zk_addr()
     qmon(zkaddr)
     mem(zkaddr)
