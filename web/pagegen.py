@@ -107,6 +107,9 @@ def loginpage():
     return """<html><head><meta charset=\"utf-8\"><title>kill proc confirm</title></head><body>
     <form method="POST" name="auth" action="/killall" >
     pass code: <input type="password" name="pass" /> <br/>
+    comment crontab?: <input type="radio" name="crontab" value="comment"> <br/>
+    uncomment crontab?: <input type="radio" name="crontab" value="uncomment" > <br/>
+    nothing with crontab?: <input type="radio" name="crontab" value="nothing" checked="checked"> <br/>
     <input type="submit" value="submit" />
     </form>
     </body></html>"""

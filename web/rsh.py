@@ -43,21 +43,32 @@ def hostinfo(host, user, dfs):
     hinfo["disks"] = dinfo
     hinfo['host'] = host
     hinfo['hostname'] = re.compile(r'==>([^\n]+)\n').search(out).group(1)
-    cpu = re.compile(r"Cpu\(s\): .+ ([\d\.]+)%id,")
-    r = cpu.search(out)
+    r = re.search(r"Cpu\(s\): .+ ([\d\.]+)%id,", out)  # # Cpu(s):  1.6%us,  2.2%sy,  0.0%ni, 95.7%id,  0.4%wa,  0.0%hi,  0.1%si,  0.1%st
     if r is not None:
         hinfo['cpu-idle'] = r.group(1)
+    else:  #  %Cpu(s):  1.5 us,  1.5 sy,  0.0 ni, 97.0 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+        r = re.search(r"%Cpu\(s\): .+ ([\d\.]+) id,", out)
+        if r is not None:
+            hinfo['cpu-idle'] = r.group(1)
 
-    mem = re.compile(r"Mem: +(\d+)k +total, +(\d+)k +used, +(\d+)k +free")
-    r = mem.search(out)
+    r = re.search(r"Mem: +(\d+)k +total, +(\d+)k +used, +(\d+)k +free", out)
     if r is not None:
         hinfo['mem-total-kb'] = int(r.group(1))
         hinfo['mem-free-kb'] = int(r.group(3))
-    swap = re.compile(r"Swap: +(\d+)k +total, +(\d+)k +used, +(\d+)k +free")
-    r = swap.search(out)
+    else:
+        r = re.search(r"KiB Mem : +(\d+) +total, +(\d+) +free, +(\d+) +used", out)
+        if r is not None:
+            hinfo['mem-total-kb'] = int(r.group(1))
+            hinfo['mem-free-kb'] = int(r.group(2))
+    r = re.search(r"Swap: +(\d+)k +total, +(\d+)k +used, +(\d+)k +free", out)
     if r is not None:
         hinfo['swap-total-kb'] = int(r.group(1))
         hinfo['swap-free-kb'] = int(r.group(3))
+    else:
+        r = re.search(r"KiB Swap: +(\d+) +total, +(\d+) +free, +(\d+) +used", out)
+        if r is not None:
+            hinfo['swap-total-kb'] = int(r.group(1))
+            hinfo['swap-free-kb'] = int(r.group(2))
 
     return hinfo
 
@@ -123,9 +134,12 @@ def proc_info(host, user, paths, lsof, jmx_ports=None):
         proc['host'] = host
 
         # 测试寻找jmx端口, 然后向jmx端口查询其它的参数
+        print 'jmx_ports:', repr(jmx_ports)
         if jmx_ports is not None:
             _ports = [p for p in ports if p in jmx_ports]
-        if len(_ports) < 1:
+            if len(_ports) < 1:
+                _ports = ports
+        else:
             _ports = ports
         for port in _ports:
             try:
@@ -275,7 +289,7 @@ def scp_log_files(host_list, out_dir):
         return sout
 
 # qmon脚本每5分钟采集的队列积压数据, 统计按主题和时间的生产/消费数量表格
-def stastic_5m_all(fpath='/idmm/idmm3/mon/_bak'):
+def stastic_5m_all(fpath='/idmm/idmm3/mon/_bak', fprefix="qmon_xq_"):
     if not os.path.exists(fpath):
         return [],[],[]
     dic = {}
@@ -291,7 +305,7 @@ def stastic_5m_all(fpath='/idmm/idmm3/mon/_bak'):
         return total, size
     for f in os.listdir(fpath):
         # fname:  qmon_fq_2018-05-08-0105
-        if not f.startswith('qmon'):
+        if not f.startswith(fprefix):
             continue
         dd = f[8:]
         ret = one_file(fpath+"/"+f)
@@ -314,7 +328,18 @@ def stastic_5m_all(fpath='/idmm/idmm3/mon/_bak'):
         y1.append(v[1]-vl[1])
         y2.append(v[1]-vl[1]-(v[2]-vl[2]))
         vl = v
-    return ",".join(["'%s'"%i[11:] for i in x]), ",".join(["%d"%i for i in y1]), ",".join(["%d"%i for i in y2])
+    # x ticks 稀疏处理
+    # nk = 30
+    # ni = len(x)
+    # if ni > nk:
+    #     k = ni / nk
+    #     for i in range(ni / k):
+    #         v = x[i*k][11:]
+    #         x[i*k] = "%s:%s" % (v[:2], v[2:])
+    #         print x[i*k]
+    #         for j in range(k - 1):
+    #             x[i * k + j+1] = ""
+    return ",".join(["'%s:%s'"%(i[11:13], i[13:15]) for i in x]), ",".join(["%d"%i for i in y1]), ",".join(["%d"%i for i in y2])
 
 # qmon脚本每5分钟采集的队列积压数据, 统计按主题和时间的生产/消费数量表格
 # python -c "import rsh; rsh.stastic_5m('../local/mon')"

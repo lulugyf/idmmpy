@@ -8,6 +8,15 @@ def _print_tmstr(t):
 def _print_tm(s):
     print " %d" % (time.mktime(time.strptime(s, "%Y-%m-%d %H:%M:%S"))*1000, )
 
+def str2tm():
+    s = "09-19 22:50:03:487"
+    ltp = 0
+    for line in open("3"):
+        p = line.strip().split(':')
+        tp = int(p[-3]) * 60 * 1000 + int(p[-2])*1000 + int(p[-1])
+        print line.strip(), tp-ltp
+        ltp = tp
+
 
 def tmstr(s):
     if s.find(':') > 0:

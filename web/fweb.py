@@ -100,9 +100,17 @@ def part_list():
     return render_template('part_list.html', yy1=yy1, xx1=xx1, title=title, xx2=xx2, yy2=yy2, tbl1=tbl1, tbl2=tbl2)
 @app.route('/5m_pc_all')
 def stastic_5m_all():
-    xx1, yy1, yy2 = rsh.stastic_5m_all()
+    if hasattr(conf, 'mon_bak_path'):
+        xx1, yy1_1, yy1_2 = rsh.stastic_5m_all(conf.mon_bak_path, "qmon_fq_")
+        xx2, yy2_1, yy2_2 = rsh.stastic_5m_all(conf.mon_bak_path, "qmon_xq_")
+    else:
+        xx1, yy1_1, yy1_2 = '', '', ''
+        xx2, yy2_1, yy2_2 = '', '', ''
     title="5分钟消息总量统计"
-    return render_template('5m_pc_all.html', yy1=yy1, xx1=xx1, title=title, yy2=yy2)
+    return render_template('5m_pc_all.html', title=title, xx1=xx1,
+                           yy1_1=yy1_1, yy1_2=yy1_2,
+                           xx2=xx2,
+                           yy2_1=yy2_1, yy2_2=yy2_2)
 @app.route('/5m_pc')
 def stastic_5m():
     xx, yy = rsh.stastic_5m()
@@ -285,7 +293,7 @@ def getmsg():
         return r.getvalue()
 
 @app.route("/killall", methods=["POST", "GET"])
-def killall(r):
+def killall():
     r = StringIO()
     pg.page_head("IDMM shutdown all", r)
     if request.method == 'POST':
