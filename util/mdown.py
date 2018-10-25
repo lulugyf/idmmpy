@@ -9,6 +9,7 @@ import threading
 import os
 import operator
 import time
+import sys
 
 class MDown:
     def __init__(self, url, outfile, blocks=6, blocksize=4*1024*1024, proxy=None):
@@ -96,6 +97,7 @@ class MDown:
             openmod = "wb"
             try:
                 st = os.stat(tmpfile)
+                self.__add_counter(st.st_size)
                 if st.st_size == rng[1]-rng[0]+1:
                     print "thread %s: file %s ok, skip"%(thid, tmpfile)
                     tmpFileQ.put(tmpfile)
@@ -105,7 +107,6 @@ class MDown:
                     rng_str = "%d-%d"%(rng[0]+st.st_size, rng[1])
                     openmod = "ab"
                     print "------ %s => %s" %( _rng, rng_str )
-                self.__add_counter(st.st_size)
             except:
                 pass
             headers['Range'] = 'bytes=%s'%rng_str
@@ -115,7 +116,7 @@ class MDown:
             if resp.status == httplib.PARTIAL_CONTENT:
                 with open(tmpfile, openmod) as fout:
                     while True:
-                        content = resp.read(4096)
+                        content = resp.read(40960)
                         if len(content) > 0:
                             fout.write(content)
                             fout.flush()
@@ -187,9 +188,10 @@ class MDown:
                 tm = (self.content_len-c1 )/s/60.0
             else:
                 tm = -1.0
-            print "\rspeed %.3f kb/s %.2f%% of %.3fMB need time: %.2f Min" %( s/1024,
+            sys.stdout.write( "\rspeed %.3f kb/s %.2f%% of %.3fMB need time: %.2f Min" %( s/1024,
                                         c1*100.0/self.content_len, self.content_len/1024.0/1024.0,
-                            tm  )
+                            tm  ) )
+            sys.stdout.flush()
             c = c1
             time.sleep(secs)
         for th in ths:
@@ -242,8 +244,9 @@ if __name__ == '__main__':
     # url = "http://172.21.0.46:9191/v3.0.3/assembly/target/broker-201810160207-release.zip"
     # m = MDown(url, "a.zip")
     # m.start()
-    url = "https://nlp.stanford.edu/software/stanford-chinese-corenlp-2018-10-05-models.jar"
-    m = MDown(url, "a.jar", proxy="172.22.0.23:8989")
+    #url = "https://nlp.stanford.edu/software/stanford-chinese-corenlp-2018-10-05-models.jar"
+    url = "https://nlp.stanford.edu/software/stanford-parser-full-2018-10-17.zip"
+    m = MDown(url, "stanford-parser-full-2018-10-17.zip", proxy="172.22.0.23:8989")
     m.start()
 
     #__test1()

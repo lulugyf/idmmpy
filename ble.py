@@ -36,8 +36,9 @@ def get_jmxaddr(zkaddr, ble_only=False):
             continue
         data = z.get(base + '/' + p)
         data1 = data[0]
+        #print '/idmm/ble', p, data1
         bleid = p[p.find('.') + 1:]
-        jmxaddr = data1[0:data1.find(':')] + data1[data1.rfind(':'):]
+        jmxaddr = data1[0:data1.split()[0].rfind(':')] + data1[data1.rfind(':'):]
         ble_ports.append((bleid, jmxaddr))
     if ble_only:
         z.close()
@@ -82,7 +83,7 @@ def getnodeinfo(zkaddr):
         data = z.get(base + '/' + p)
         data1 = data[0]
         bleid = p[p.find('.') + 1:]
-        jmxaddr = data1[0:data1.find(':')] + data1[data1.rfind(':'):]
+        jmxaddr = jmxaddr = data1[0:data1.split()[0].rfind(':')] + data1[data1.rfind(':'):]
         dataaddr = data1.split()[0]
         ble.append('%s %s %s\n' % (bleid, jmxaddr, dataaddr))
     info['ble'] = ble
@@ -129,64 +130,13 @@ def getinfo(bleid, jmxaddr, m, stat):
     print '    >>DBOper_Blocking %s'%bleid, dboper_block '''
     #print json.dumps(o1, indent=4)
 
-def getaddrs(zkaddr):
-    z = zk.ZKCli(zkaddr)
-    z.start()
-    z.wait()
-
-    f = file(getpath('.ble.list'), 'w')
-    base = '/idmm/ble'
-    for p in z.list(base):
-        if not p.startswith('id.') or len(p) < 11:
-            continue
-        data = z.get(base+'/'+p)
-        data1 = data[0]
-        bleid = p[p.find('.')+1:]
-        jmxaddr = data1[0:data1.find(':')] + data1[data1.rfind(':'):]
-        dataaddr = data1.split()[0]
-        f.write('%s %s %s\n'%(bleid, jmxaddr, dataaddr))
-    f.close()
-
-    f = file(getpath('.httpbroker.list'), 'w')
-    for p in z.list('/idmm/httpbroker'):
-        f.write(p)
-        f.write('\n')
-    f.close()
-
-    f = file(getpath('.broker.list'), 'w')
-    for p in z.list('idmm/broker'):
-        f.write(p)
-        f.write('\n')
-    f.close()
-    
-    z.close()
-
-def getpath(f):
-    p = os.path.abspath(sys.argv[0])
-    #print p
-    p = p[:p.rfind(os.path.sep)+1]
-    return p + f
-
 def qmon(zkaddr):
-    addrfile = getpath('.ble.list')
-    need_refresh_addrlist = True
-    # try:
-    #     st = os.stat(addrfile)
-    #     if time.time() - st.st_mtime > 3600.0:
-    #         need_refresh_addrlist = True
-    # except:
-    #     need_refresh_addrlist = True
-    if need_refresh_addrlist:
-        getaddrs(zkaddr)
     m = []
     
     stat = [0, 0, 0]
-    for line in file(addrfile):
-        d = line.strip().split()
-        if len(d) < 2:
-            continue
-        getinfo(d[0], d[1], m, stat)
-    if True: return 
+    for bleid, jmxaddr in get_jmxaddr(zkaddr, True):
+        getinfo(bleid, jmxaddr, m, stat)
+    #if True: return
     print '\n--------size > 0:'
     print 'BLEID  TOPIC_ID   CLIENT_ID  total   size   sending  err  status'
     print '----------------------------------------------------------------'
@@ -214,7 +164,7 @@ def mem(zkaddr):
 
 
 if __name__ == '__main__':
-    zkaddr = '172.18.231.45:7181'
+    zkaddr = '172.18.231.6:7181'
     #from local_db import conf_zk_addr
     #zkaddr = conf_zk_addr()
     qmon(zkaddr)
