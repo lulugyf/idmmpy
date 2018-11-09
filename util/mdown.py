@@ -240,13 +240,26 @@ def __test1():
         f.write(resp.read())
     conn.close()
 
+import sys
 if __name__ == '__main__':
     # url = "http://172.21.0.46:9191/v3.0.3/assembly/target/broker-201810160207-release.zip"
     # m = MDown(url, "a.zip")
     # m.start()
     #url = "https://nlp.stanford.edu/software/stanford-chinese-corenlp-2018-10-05-models.jar"
-    url = "https://nlp.stanford.edu/software/stanford-parser-full-2018-10-17.zip"
-    m = MDown(url, "stanford-parser-full-2018-10-17.zip", proxy="172.22.0.23:8989")
-    m.start()
+    if len(sys.argv) > 1:
+        url = sys.argv[1]
+        fname = url[url.rfind('/')+1:]
+        blocksize = 4*1024*1024
+        if len(sys.argv) > 2:
+            blocksize = int(sys.argv[2]) * 1024 * 1024
+        proxy = None
+        if len(sys.argv) > 3:
+            proxy = sys.argv[3]
+        m = MDown(url, fname, blocksize=blocksize, proxy=proxy)
+        m.start()
+    else:
+        url = "https://nlp.stanford.edu/software/stanford-parser-full-2018-10-17.zip"
+        m = MDown(url, "stanford-parser-full-2018-10-17.zip", proxy="172.22.0.23:8989")
+        m.start()
 
     #__test1()

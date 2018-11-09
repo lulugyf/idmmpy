@@ -16,6 +16,27 @@ create /idmm/configServer/version 0 0 0
 e:/00work@2017/idmm/sc_py/idmm.py
 */ 
 
+create table consume_order_info (
+	src_topic_id VARCHAR(32),
+	attribute_key VARCHAR(32),
+	attribute_value VARCHAR(32),
+	dest_topic_id VARCHAR(32),
+	consumer_client_id VARCHAR(32),
+	consume_seq int,
+	use_status char(1)
+);
+
+create table consume_notice_info(
+	producer_client_id VARCHAR(32),
+	src_topic_id VARCHAR(32),
+	dest_topic_id VARCHAR(32),
+    consumer_client_id VARCHAR(32),
+	notice_topic_id VARCHAR(32),
+	notice_client_id VARCHAR(32),
+	use_status char(1)
+);
+
+
 CREATE TABLE `ble_base_info_0` (
 	`BLE_id` DECIMAL(8,0) NOT NULL COMMENT 'BLE节点标识',
 	`id_number` DECIMAL(1,0) NOT NULL COMMENT '节点序号',

@@ -377,6 +377,49 @@ def stastic_5m(fpath='/idmm/idmm3/mon/_bak'):
 
     return ",".join(["'%s'"%i[11:] for i in xs]), ",\n".join(lines[:12])
 
+def stastic_5m_all_mannual(fpath='d:/tmp/idmm/20181001', fprefix="qmon_"):
+    if not os.path.exists(fpath):
+        return [],[],[]
+    dic = {}
+    def one_file(f):
+        total = 0
+        size = 0
+        for line in open(f):
+            ff = line.split()
+            if len(ff) != 6:
+                continue
+            total += int(ff[2])
+            size += int(ff[3])
+        return total, size
+    for f in os.listdir(fpath):
+        # fname:  qmon_fq_2018-05-08-0105
+        if not f.startswith(fprefix):
+            continue
+        dd = f[8:]
+        ret = one_file(fpath+"/"+f)
+        if dic.has_key(dd):
+            v = dic[dd]
+            dic[dd] = (v[0]+ret[0], v[1]+ret[1])
+        else:
+            dic[dd] = ret
+
+    lst = [(k, v[0], v[1]) for k, v in dic.items()]
+    lst = sorted(lst, key=lambda v: v[0])
+
+    # ret = []
+    vl = lst[0]
+    fout = open(fpath+".all", "w")
+    for v in lst[1:]:
+        # ret.append("%s %d %d"%( v[0], v[1]-vl[1], v[1]-vl[1]-(v[2]-vl[2]))  )
+        fout.write("%s %d %d\n"%( v[0], v[1]-vl[1], v[1]-vl[1]-(v[2]-vl[2])) )
+        vl = v
+    fout.close()
+    # for i in range(1,32):
+    #     day = "201810%02d"%i
+    #     print "mkdir %s"%day
+    #     print "cd %s"%day
+    #     print "tar xzf ../%s.tgz"%day
+    #     print "cd .."
 
 def main():
     host, user = "172.21.0.46", "crmpdscm"
@@ -385,4 +428,8 @@ def main():
     proc_info(host, user, ['/crmpdscm/idmm3/broker0'], "/usr/sbin/lsof")
 
 if __name__ == '__main__':
-    main()
+    # main()
+    n = ["d:/tmp/idmm/201810%02d"%i for i in range(1, 32)]
+    # for i in n:
+    #     stastic_5m_all_mannual(i)
+    stastic_5m_all_mannual("d:/tmp/idmm/20181101")
